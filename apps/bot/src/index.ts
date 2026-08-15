@@ -1,4 +1,11 @@
-import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config(); // fallback: apps/bot/.env if present
+
 import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
 import { connectDatabase } from "@bunnydex/database";
 import { COMMAND_PREFIX, loadEnv } from "@bunnydex/config";
@@ -55,6 +62,20 @@ async function main() {
 }
 
 main().catch((err) => {
+  const message = err instanceof Error ? err.message : String(err);
   console.error(err);
+  if (message.includes("disallowed intents") || message.includes("Used disallowed intents")) {
+    const appId = process.env.DISCORD_CLIENT_ID ?? "YOUR_APP_ID";
+    console.error(`
+============================================================
+FIX: Enable Message Content Intent in Discord Developer Portal
+1. Open: https://discord.com/developers/applications/${appId}/bot
+2. Scroll to "Privileged Gateway Intents"
+3. Turn ON "MESSAGE CONTENT INTENT" (toggle must be blue)
+4. Click Save Changes
+5. Run: pnpm bot
+============================================================
+`);
+  }
   process.exit(1);
 });

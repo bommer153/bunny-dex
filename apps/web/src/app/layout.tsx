@@ -31,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 BunnyDex
               </a>
               <nav className="flex flex-wrap gap-3 text-sm text-meadow-100/80">
+                <a href="/wiki">Wiki</a>
                 <a href="/profile">Profile</a>
                 <a href="/collection">Collection</a>
                 <a href="/cards">Cards</a>

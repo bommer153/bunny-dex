@@ -26,6 +26,11 @@ export default function HomePage() {
               <a href="/profile">
                 <Button>Open profile</Button>
               </a>
+              <a href="/wiki">
+                <Button className="bg-transparent border border-meadow-400 text-meadow-400">
+                  Open wiki
+                </Button>
+              </a>
               <Button
                 className="bg-transparent border border-meadow-400 text-meadow-400"
                 onClick={() => signOut()}
@@ -34,7 +39,14 @@ export default function HomePage() {
               </Button>
             </>
           ) : (
-            <Button onClick={() => signIn("discord")}>Continue with Discord</Button>
+            <>
+              <Button onClick={() => signIn("discord")}>Continue with Discord</Button>
+              <a href="/wiki">
+                <Button className="bg-transparent border border-meadow-400 text-meadow-400">
+                  Read the wiki
+                </Button>
+              </a>
+            </>
           )}
         </div>
       </div>
