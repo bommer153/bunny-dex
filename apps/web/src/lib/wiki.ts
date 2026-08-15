@@ -138,6 +138,8 @@ export const CARD_TYPES = [
   { id: "spell", note: "Support cards (coming as the catalog grows)." },
   { id: "artifact", note: "Relics and tools (coming as the catalog grows)." },
 ] as const;
+
+export const SETS = [
   { id: "meadow", name: "Meadow Beginnings", blurb: "Starter flock and early explorers." },
   { id: "ember", name: "Ember Grove", blurb: "Fire and storm of the grove." },
   { id: "tide", name: "Tide Hollow", blurb: "Water and ice of the deep tide." },

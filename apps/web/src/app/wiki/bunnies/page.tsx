@@ -1,4 +1,4 @@
-import { CARD_CATALOG, ELEMENTS, RARITIES, SETS, VARIANTS } from "@/lib/wiki";
+import { CARD_CATALOG, CARD_TYPES, ELEMENTS, RARITIES, SETS, VARIANTS } from "@/lib/wiki";
 
 export default function BunniesWikiPage() {
   return (
@@ -64,6 +64,25 @@ export default function BunniesWikiPage() {
             >
               <span className="font-medium capitalize text-meadow-400">{v.id}</span>
               <span className="text-meadow-100/60"> — {v.note}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl text-meadow-400">Types</h2>
+        <p className="text-sm text-meadow-100/65">
+          Filter in Discord with <code className="text-meadow-400">bd type bunny</code>. The live
+          catalog is all bunnies in MVP.
+        </p>
+        <ul className="grid gap-2 sm:grid-cols-3">
+          {CARD_TYPES.map((t) => (
+            <li
+              key={t.id}
+              className="rounded-xl border border-meadow-700/80 bg-meadow-900/40 px-4 py-3 text-sm"
+            >
+              <span className="font-medium capitalize text-meadow-400">{t.id}</span>
+              <span className="text-meadow-100/60"> — {t.note}</span>
             </li>
           ))}
         </ul>
