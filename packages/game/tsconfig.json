@@ -1,0 +1,12 @@
+{
+  "extends": "../../tooling/typescript-config/node.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": false,
+    "declarationMap": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false
+  },
+  "include": ["src"]
+}

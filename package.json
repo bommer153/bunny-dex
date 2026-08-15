@@ -1,0 +1,19 @@
+{
+  "name": "bunny-dex",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:seed": "pnpm --filter @bunnydex/database seed",
+    "bot": "pnpm --filter @bunnydex/bot dev",
+    "web": "pnpm --filter @bunnydex/web dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

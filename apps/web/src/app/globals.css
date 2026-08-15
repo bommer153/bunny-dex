@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bd-bg: #0f1a14;
+  --bd-fg: #e8f2ea;
+  --bd-muted: #8fa894;
+  --bd-surface: #16241c;
+  --bd-border: #2a4032;
+  --bd-accent: #6fcf97;
+  --bd-accent-fg: #0b1510;
+}
+
+body {
+  background: var(--bd-bg);
+  color: var(--bd-fg);
+}

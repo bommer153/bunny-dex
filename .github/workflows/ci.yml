@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm --filter @bunnydex/types build
+      - run: pnpm --filter @bunnydex/config build
+      - run: pnpm --filter @bunnydex/validation build
+      - run: pnpm --filter @bunnydex/database build
+      - run: pnpm --filter @bunnydex/game build
+      - run: pnpm --filter @bunnydex/game test
