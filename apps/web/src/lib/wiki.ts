@@ -133,7 +133,11 @@ export const VARIANTS = [
   { id: "royal", note: "Top collectibility tier" },
 ] as const;
 
-export const SETS = [
+export const CARD_TYPES = [
+  { id: "bunny", note: "Collectible fighters used in decks and hunts." },
+  { id: "spell", note: "Support cards (coming as the catalog grows)." },
+  { id: "artifact", note: "Relics and tools (coming as the catalog grows)." },
+] as const;
   { id: "meadow", name: "Meadow Beginnings", blurb: "Starter flock and early explorers." },
   { id: "ember", name: "Ember Grove", blurb: "Fire and storm of the grove." },
   { id: "tide", name: "Tide Hollow", blurb: "Water and ice of the deep tide." },
