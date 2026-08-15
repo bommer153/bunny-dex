@@ -29,6 +29,103 @@ import type { LeaderboardKind, Variant } from "@bunnydex/types";
 
 const adminIds = () => parseAdminIds(process.env.ADMIN_DISCORD_IDS ?? "");
 
+const FACET_ART = {
+  rarity: "aurora-myth",
+  element: "ember-puff",
+  variant: "prism-patron",
+  type: "meadow-hop",
+  set: "meadow-hop",
+} as const;
+
+function fmtCountRows(
+  rows: Array<{ key: string; owned: number; total: number; copies?: number }>,
+  copies = false,
+) {
+  return rows
+    .map((r) => {
+      const extra = copies ? ` · ${r.copies ?? 0} copies` : "";
+      return `• **${r.key}**: ${r.owned}/${r.total}${extra}`;
+    })
+    .join("\n");
+}
+
+async function replyCollection(message: Message, discordId: string, args: string[]) {
+  const query = await CollectionService.parseArgs(args);
+  if (query.kind === "overview") {
+    const progress = await CollectionService.getProgress(discordId);
+    await replyEmbed(message, {
+      title: `Collection ${progress.completionPct}%`,
+      description: [
+        `${progress.unique}/${progress.catalogSize} unique · ${progress.totalCards} copies`,
+        "",
+        "**Sets**",
+        ...progress.sets.map((s) => `• ${s.name}: ${s.owned}/${s.total}`),
+        "",
+        "**Rarity** — `bd rarity <name>`",
+        fmtCountRows(progress.rarity),
+        "",
+        "**Elements** — `bd element <name>`",
+        fmtCountRows(progress.elements),
+        "",
+        "**Variants** — `bd variant <name>`",
+        fmtCountRows(progress.variants, true),
+        "",
+        "**Types** — `bd type <name>`",
+        fmtCountRows(progress.types),
+      ].join("\n"),
+      slug: "aurora-myth",
+      footer: "bd collection variant · bd collection type · bd type bunny",
+    });
+    return;
+  }
+
+  if (query.kind === "facet") {
+    const progress = await CollectionService.getProgress(discordId);
+    const rows = CollectionService.facetRows(progress, query.facet);
+    const titles = {
+      rarity: "Rarity progress",
+      element: "Element progress",
+      variant: "Variant progress",
+      type: "Type progress",
+      set: "Set progress",
+    } as const;
+    await replyEmbed(message, {
+      title: titles[query.facet],
+      description: [
+        fmtCountRows(rows, query.facet === "variant"),
+        "",
+        `Inspect one: \`bd collection ${query.facet} <name>\``,
+      ].join("\n"),
+      slug: FACET_ART[query.facet],
+      footer: CollectionService.usage().split("\n")[5],
+    });
+    return;
+  }
+
+  const detail = await CollectionService.inspect(discordId, query.facet, query.value);
+  const ownedLines = detail.owned.slice(0, 15).map((c) => {
+    const variants = c.variants.length ? ` (${c.variants.join(", ")})` : "";
+    return `• **${c.name}**${variants}`;
+  });
+  const moreOwned =
+    detail.owned.length > 15 ? `\n• … +${detail.owned.length - 15} more` : "";
+  const missingLines = detail.missing.slice(0, 10).map((c) => `• ${c.name}`);
+  const moreMissing =
+    detail.missing.length > 10 ? `\n• … +${detail.missing.length - 10} missing` : "";
+
+  await replyEmbed(message, {
+    title: `${query.facet}: ${detail.value}`,
+    description: [
+      `**${detail.ownedUnique}/${detail.total}** unique · **${detail.copies}** copies`,
+      "",
+      ownedLines.length ? `**Owned**\n${ownedLines.join("\n")}${moreOwned}` : "_None owned yet._",
+      missingLines.length ? `\n**Missing**\n${missingLines.join("\n")}${moreMissing}` : "\nSet complete!",
+    ].join("\n"),
+    slug: detail.previewSlug,
+    footer: "bd card <name> · bd cards",
+  });
+}
+
 export async function handleCommand(message: Message, args: string[]) {
   const cmd = (args[0] ?? "help").toLowerCase();
   const rest = args.slice(1);
@@ -46,6 +143,7 @@ export async function handleCommand(message: Message, args: string[]) {
             "`bd start` `bd profile` `bd bal` `bd daily` `bd work`",
             "`bd hunt` `bd inv` `bd use <item>` `bd open <box>`",
             "`bd pack` `bd pack open <slug>` `bd card <name>` `bd collection`",
+            "`bd rarity` `bd element` `bd variant` `bd type`",
             "`bd shop` `bd buy <sku>` `bd flip` `bd slots` `bd dice`",
             "`bd deck` `bd battle random` `bd battle @user`",
             "`bd trade @user` `bd market` `bd quests` `bd achievements`",
@@ -259,6 +357,7 @@ export async function handleCommand(message: Message, args: string[]) {
           fields: [
             { name: "Rarity", value: card.rarity, inline: true },
             { name: "Element", value: card.element, inline: true },
+            { name: "Type", value: String(card.cardType ?? "bunny"), inline: true },
             { name: "Set", value: card.setId, inline: true },
             {
               name: "Stats",
@@ -273,6 +372,10 @@ export async function handleCommand(message: Message, args: string[]) {
       }
 
       case "cards": {
+        if (rest.length) {
+          await replyCollection(message, id.discordId, rest);
+          break;
+        }
         const user = await UserService.requireByDiscordId(id.discordId);
         const cards = await CardService.getUserCards(String(user._id), "available");
         if (!cards.length) {
@@ -293,20 +396,34 @@ export async function handleCommand(message: Message, args: string[]) {
         break;
       }
 
-      case "collection": {
-        const progress = await CollectionService.getProgress(id.discordId);
-        const setLines = progress.sets.map(
-          (s) => `• ${s.name}: ${s.owned}/${s.total}`,
-        );
-        await replyEmbed(message, {
-          title: `Collection ${progress.completionPct}%`,
-          description: [
-            `${progress.unique}/${progress.catalogSize} unique`,
-            ...setLines,
-          ].join("\n"),
-          slug: "aurora-myth",
-          footer: "Wiki: all bunny portraits on /wiki/bunnies",
-        });
+      case "collection":
+      case "col": {
+        await replyCollection(message, id.discordId, rest);
+        break;
+      }
+
+      case "rarity":
+      case "rarities": {
+        await replyCollection(message, id.discordId, ["rarity", ...rest]);
+        break;
+      }
+
+      case "element":
+      case "elements":
+      case "elem": {
+        await replyCollection(message, id.discordId, ["element", ...rest]);
+        break;
+      }
+
+      case "variant":
+      case "variants": {
+        await replyCollection(message, id.discordId, ["variant", ...rest]);
+        break;
+      }
+
+      case "type":
+      case "types": {
+        await replyCollection(message, id.discordId, ["type", ...rest]);
         break;
       }
 

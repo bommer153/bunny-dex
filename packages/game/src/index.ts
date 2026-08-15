@@ -30,7 +30,12 @@ export { BattleService } from "./services/battle-service.js";
 export { MatchmakingService } from "./services/matchmaking-service.js";
 export { TradeService } from "./services/trade-service.js";
 export { MarketplaceService } from "./services/marketplace-service.js";
-export { CollectionService } from "./services/collection-service.js";
+export {
+  CollectionService,
+  type CollectionFacet,
+  type CollectionQuery,
+  type CollectionCount,
+} from "./services/collection-service.js";
 export { AchievementService } from "./services/achievement-service.js";
 export { QuestService } from "./services/quest-service.js";
 export { LeaderboardService } from "./services/leaderboard-service.js";
