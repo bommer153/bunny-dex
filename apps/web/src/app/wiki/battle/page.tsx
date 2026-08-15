@@ -1,3 +1,11 @@
+import { WikiCardStrip } from "@/components/wiki-card-art";
+
+const LANES = [
+  { slug: "meadow-hop", name: "Lane 1 · Meadow Hop" },
+  { slug: "ember-puff", name: "Lane 2 · Ember Puff" },
+  { slug: "tide-tuft", name: "Lane 3 · Tide Tuft" },
+];
+
 export default function BattleWikiPage() {
   return (
     <article className="space-y-8">
@@ -7,6 +15,15 @@ export default function BattleWikiPage() {
           MVP battles are fast 3-lane clashes — not a full turn-based TCG yet.
         </p>
       </header>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl text-meadow-400">Example lanes</h2>
+        <p className="text-sm text-meadow-100/65">
+          Three cards from your active deck face off at once. Look them up in Discord with{" "}
+          <code className="text-meadow-400">bd card &lt;name&gt;</code> to see full art and stats.
+        </p>
+        <WikiCardStrip slugs={LANES} />
+      </section>
 
       <section className="space-y-3">
         <h2 className="font-display text-2xl text-meadow-400">Deck rules</h2>

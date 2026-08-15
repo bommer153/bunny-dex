@@ -5,6 +5,12 @@ export default function WikiLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
       <aside className="h-fit rounded-2xl border border-meadow-700/60 bg-meadow-900/50 p-4 lg:sticky lg:top-6">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/cards/meadow-hop.png"
+          alt="Meadow Hop"
+          className="mb-3 h-16 w-16 rounded-xl object-cover ring-1 ring-meadow-700"
+        />
         <p className="font-display text-lg text-meadow-400">Wiki</p>
         <p className="mt-1 text-xs text-meadow-100/50">Discover. Collect. Battle.</p>
         <nav className="mt-4 flex flex-col gap-1 text-sm">

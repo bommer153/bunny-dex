@@ -5,6 +5,7 @@ export const envSchema = z.object({
   DISCORD_TOKEN: z.string().optional(),
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
+  PUBLIC_WEB_URL: z.string().url().optional(),
   NEXTAUTH_URL: z.string().url().default("http://localhost:3000"),
   NEXTAUTH_SECRET: z.string().min(8).default("dev-secret-change-me"),
   ADMIN_DISCORD_IDS: z.string().default(""),

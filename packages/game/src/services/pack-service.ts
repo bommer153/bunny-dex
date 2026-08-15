@@ -90,6 +90,7 @@ export class PackService {
         name: def.name,
         rarity: def.rarity,
         variant,
+        slug: def.slug,
       });
     }
 

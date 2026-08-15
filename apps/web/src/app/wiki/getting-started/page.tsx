@@ -1,4 +1,12 @@
+import { CARD_CATALOG } from "@/lib/wiki";
+import { WikiCardStrip } from "@/components/wiki-card-art";
+
 export default function GettingStartedPage() {
+  const starters = CARD_CATALOG.filter((c) => c.starter).map((c) => ({
+    slug: c.slug,
+    name: c.name,
+  }));
+
   return (
     <article className="prose-invert space-y-6">
       <h1 className="font-display text-4xl text-meadow-400">Getting started</h1>
@@ -22,19 +30,34 @@ export default function GettingStartedPage() {
           <pre className="mt-2 overflow-x-auto rounded-xl border border-meadow-700 bg-meadow-950 p-3 text-sm text-meadow-400">
             bd start
           </pre>
-          You receive starter bunnies and coins.
+          You receive starter bunnies and coins. Discord shows each starter portrait on the welcome
+          message.
         </li>
         <li>
           Try your first hunt:
           <pre className="mt-2 overflow-x-auto rounded-xl border border-meadow-700 bg-meadow-950 p-3 text-sm text-meadow-400">
             bd hunt
           </pre>
+          Card drops attach the bunny image in Discord.
+        </li>
+        <li>
+          Look up any bunny with <code className="text-meadow-400">bd card meadow hop</code> — the
+          bot embeds the full card art.
         </li>
         <li>
           Sign in on the web dashboard with Discord to view profile, collection, decks, and the
           marketplace.
         </li>
       </ol>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-xl text-meadow-400">Your starter flock</h2>
+        <p className="text-sm text-meadow-100/70">
+          These four Meadow bunnies are granted on{" "}
+          <code className="text-meadow-400">bd start</code>.
+        </p>
+        <WikiCardStrip slugs={starters} />
+      </section>
 
       <section className="rounded-2xl border border-meadow-700 bg-meadow-900/50 p-5">
         <h2 className="font-display text-xl text-meadow-400">First-hour tips</h2>

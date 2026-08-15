@@ -1,3 +1,43 @@
+import { WikiCardArt } from "@/components/wiki-card-art";
+
+const PACKS = [
+  {
+    slug: "standard",
+    name: "Standard pack",
+    cost: "250 coins · 5 cards",
+    art: "meadow-hop",
+    artName: "Meadow Hop",
+  },
+  {
+    slug: "fire",
+    name: "Ember pack",
+    cost: "300 coins · Ember set",
+    art: "ember-puff",
+    artName: "Ember Puff",
+  },
+  {
+    slug: "tide",
+    name: "Tide pack",
+    cost: "300 coins · Tide Hollow",
+    art: "tide-tuft",
+    artName: "Tide Tuft",
+  },
+  {
+    slug: "nightveil",
+    name: "Nightveil pack",
+    cost: "320 coins · Nightveil",
+    art: "dusk-dart",
+    artName: "Dusk Dart",
+  },
+  {
+    slug: "legendary",
+    name: "Legendary pack",
+    cost: "10 gems · high rarities",
+    art: "eclipse-empress",
+    artName: "Eclipse Empress",
+  },
+];
+
 export default function EconomyWikiPage() {
   return (
     <article className="space-y-8">
@@ -40,6 +80,53 @@ export default function EconomyWikiPage() {
           <li>Marketplace purchases (seller fee sinks coins)</li>
           <li>In-game gambling (limits + cooldowns apply)</li>
         </ul>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl text-meadow-400">Items</h2>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {[
+            { name: "Lucky Charm", desc: "+10% rare chance for 10 hunts." },
+            { name: "Hunter's Lens", desc: "+15% special variant chance for 8 hunts." },
+            { name: "Energy Drink", desc: "Reduces next hunt cooldown by 30 seconds." },
+            { name: "Mystery Loot Box", desc: "Random coins, items, or cards." },
+            { name: "Legendary Loot Box", desc: "High-tier coins, gems, and rare cards." },
+            { name: "Pack Ticket", desc: "Redeemable toward a standard pack." },
+          ].map((item) => (
+            <li
+              key={item.name}
+              className="rounded-xl border border-meadow-700 bg-meadow-900/40 px-4 py-3"
+            >
+              <div className="font-medium text-meadow-400">{item.name}</div>
+              <p className="text-sm text-meadow-100/65">{item.desc}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl text-meadow-400">Packs</h2>
+        <p className="text-sm text-meadow-100/65">
+          Opening a pack in Discord (<code className="text-meadow-400">bd pack open &lt;slug&gt;</code>
+          ) shows each pulled bunny as a gallery of card images.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {PACKS.map((pack) => (
+            <div key={pack.slug} className="space-y-2">
+              <WikiCardArt
+                slug={pack.art}
+                name={pack.artName}
+                href={`/cards/${pack.art}`}
+                caption={pack.name}
+              />
+              <p className="text-center text-xs text-meadow-100/60">
+                <code className="text-meadow-400">{pack.slug}</code>
+                <br />
+                {pack.cost}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-meadow-700 bg-meadow-900/50 p-5">

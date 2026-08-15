@@ -3,13 +3,16 @@
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Button } from "@bunnydex/ui";
 
+const HERO_CARDS = ["meadow-hop", "cinder-monarch", "tide-tuft", "eclipse-empress"];
+
 export default function HomePage() {
   const { data: session } = useSession();
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-meadow-700/50 bg-gradient-to-br from-meadow-900 via-meadow-950 to-black px-6 py-16 md:px-12 md:py-24">
       <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_1px_1px,rgba(111,207,151,0.35)_1px,transparent_0)] [background-size:24px_24px]" />
-      <div className="relative max-w-2xl">
+      <div className="relative grid items-center gap-10 md:grid-cols-[1fr_minmax(0,22rem)]">
+      <div className="max-w-2xl">
         <p className="font-display text-5xl leading-none text-meadow-400 md:text-7xl">
           BunnyDex
         </p>
@@ -49,6 +52,19 @@ export default function HomePage() {
             </>
           )}
         </div>
+      </div>
+      <div className="relative grid grid-cols-2 gap-3">
+        {HERO_CARDS.map((slug) => (
+          <a
+            key={slug}
+            href={`/cards/${slug}`}
+            className="overflow-hidden rounded-2xl border border-meadow-700/70 shadow-lg shadow-black/40"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/cards/${slug}.png`} alt="" className="aspect-square w-full object-cover" />
+          </a>
+        ))}
+      </div>
       </div>
     </section>
   );

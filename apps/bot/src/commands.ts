@@ -24,7 +24,7 @@ import {
   EconomyService,
 } from "@bunnydex/game";
 import { parseAdminIds } from "@bunnydex/config";
-import { formatError, identityFromDiscord, mentionId, reply } from "./util.js";
+import { formatError, identityFromDiscord, mentionId, reply, replyEmbed, replyCardGallery, wikiUrl } from "./util.js";
 import type { LeaderboardKind, Variant } from "@bunnydex/types";
 
 const adminIds = () => parseAdminIds(process.env.ADMIN_DISCORD_IDS ?? "");
@@ -38,30 +38,67 @@ export async function handleCommand(message: Message, args: string[]) {
     switch (cmd) {
       case "help":
       case "h":
-        await reply(
-          message,
-          [
-            "**BunnyDex** — Discover. Collect. Battle.",
+        await replyEmbed(message, {
+          title: "BunnyDex — Discover. Collect. Battle.",
+          description: [
+            "**Play in Discord** with the `bd` prefix.",
+            "",
             "`bd start` `bd profile` `bd bal` `bd daily` `bd work`",
             "`bd hunt` `bd inv` `bd use <item>` `bd open <box>`",
             "`bd pack` `bd pack open <slug>` `bd card <name>` `bd collection`",
-            "`bd shop` `bd buy <sku>` `bd flip <amt> <heads|tails>` `bd slots <amt>`",
-            "`bd deck` `bd deck create|add|remove|use|view <…>`",
-            "`bd battle random` `bd battle @user` `bd battle history`",
-            "`bd trade @user` `bd trade add|coins|confirm|cancel`",
-            "`bd market` `bd market sell|buy|cancel|search|mine`",
-            "`bd quests` `bd achievements` `bd leaderboard <kind>`",
+            "`bd shop` `bd buy <sku>` `bd flip` `bd slots` `bd dice`",
+            "`bd deck` `bd battle random` `bd battle @user`",
+            "`bd trade @user` `bd market` `bd quests` `bd achievements`",
+            "",
+            `[Open the wiki](${wikiUrl()}) for cards, commands, and sets.`,
+            "`bd wiki` · `bd card meadow hop`",
           ].join("\n"),
-        );
+          slug: "meadow-hop",
+          footer: "Card art is shown on hunts, packs, and bd card",
+        });
         break;
+
+      case "wiki": {
+        const page = rest[0]?.toLowerCase();
+        const slugMap: Record<string, string> = {
+          commands: "commands",
+          bunnies: "bunnies",
+          cards: "bunnies",
+          economy: "economy",
+          battle: "battle",
+          start: "getting-started",
+        };
+        const path = slugMap[page ?? ""] ?? "";
+        await replyEmbed(message, {
+          title: "BunnyDex Wiki",
+          description: `[Read the wiki](${wikiUrl(path)}) — commands, all 31 bunnies, economy, and battle rules.`,
+          slug: "sunflare-bun",
+        });
+        break;
+      }
 
       case "start":
       case "begin": {
         const result = await UserService.start(id);
-        await reply(
-          message,
-          `${result.message}\n🪙 Starter coins granted. Try \`bd hunt\` and \`bd deck\`.`,
-        );
+        const starters = [
+          { name: "Meadow Hop", rarity: "common", variant: "normal", slug: "meadow-hop" },
+          { name: "Dewdrop Ears", rarity: "common", variant: "normal", slug: "dewdrop-ears" },
+          { name: "Spark Whisk", rarity: "common", variant: "normal", slug: "spark-whisk" },
+          { name: "Willow Guard", rarity: "common", variant: "normal", slug: "willow-guard" },
+        ];
+        if (result.created) {
+          await replyCardGallery(
+            message,
+            `${result.message}\n🪙 Starter coins + your first flock.`,
+            starters,
+          );
+        } else {
+          await replyEmbed(message, {
+            title: result.message,
+            description: "Try `bd hunt`, `bd card meadow hop`, and `bd wiki`.",
+            slug: "meadow-hop",
+          });
+        }
         break;
       }
 
@@ -107,19 +144,23 @@ export async function handleCommand(message: Message, args: string[]) {
       case "hunt": {
         const r = await HuntService.hunt(id.discordId);
         const reward = r.reward;
-        let text = r.pityHit ? "✨ Pity triggered!\n" : "";
+        const pity = r.pityHit ? "✨ Pity triggered!\n" : "";
         if (reward.type === "card") {
-          text += `You found **${reward.name}** (${reward.rarity} · ${reward.variant})!`;
+          await replyEmbed(message, {
+            title: `You found ${reward.name}!`,
+            description: `${pity}**${reward.rarity}** · ${reward.variant}`,
+            slug: reward.slug,
+            footer: "bd card <name> · wiki /wiki/bunnies",
+          });
         } else if (reward.type === "coins") {
-          text += `You found 🪙 ${reward.amount}`;
+          await reply(message, `${pity}You found 🪙 ${reward.amount}`);
         } else if (reward.type === "gems") {
-          text += `You found 💎 ${reward.amount}`;
+          await reply(message, `${pity}You found 💎 ${reward.amount}`);
         } else if (reward.type === "item") {
-          text += `You found **${reward.itemSlug}** x${reward.quantity}`;
+          await reply(message, `${pity}You found **${reward.itemSlug}** x${reward.quantity}`);
         } else {
-          text += `Reward: ${JSON.stringify(reward)}`;
+          await reply(message, `${pity}Reward: ${JSON.stringify(reward)}`);
         }
-        await reply(message, text);
         break;
       }
 
@@ -162,15 +203,31 @@ export async function handleCommand(message: Message, args: string[]) {
           break;
         }
         const r = await LootBoxService.open(id.discordId, boxSlug);
-        await reply(message, `Opened **${boxSlug}** → ${JSON.stringify(r.reward)}`);
+        if (r.reward.type === "card") {
+          await replyEmbed(message, {
+            title: `Opened ${boxSlug}`,
+            description: `**${r.reward.name}** (${r.reward.rarity} · ${r.reward.variant})`,
+            slug: r.reward.slug,
+          });
+        } else {
+          await reply(message, `Opened **${boxSlug}** → ${JSON.stringify(r.reward)}`);
+        }
         break;
       }
 
       case "pack": {
         if (rest[0] === "open" && rest[1]) {
           const r = await PackService.purchaseAndOpen(id.discordId, rest[1]);
-          const lines = r.cards.map((c) => `• ${c.name} (${c.rarity}/${c.variant})`);
-          await reply(message, [`Opened **${r.pack.name}**`, ...lines].join("\n"));
+          await replyCardGallery(
+            message,
+            `Opened ${r.pack.name}`,
+            r.cards.map((c) => ({
+              name: c.name,
+              rarity: c.rarity,
+              variant: c.variant,
+              slug: c.slug,
+            })),
+          );
         } else {
           const packs = await PackService.list();
           await reply(
@@ -195,24 +252,44 @@ export async function handleCommand(message: Message, args: string[]) {
           break;
         }
         const card = await CardCatalogService.getBySlugOrId(q);
-        await reply(
-          message,
-          `**${card.name}** (${card.rarity} · ${card.element})\n${card.description}\nATK ${card.atk} DEF ${card.def} HP ${card.hp} · value ${card.baseValue}`,
-        );
+        await replyEmbed(message, {
+          title: card.name,
+          description: card.description,
+          slug: card.slug,
+          fields: [
+            { name: "Rarity", value: card.rarity, inline: true },
+            { name: "Element", value: card.element, inline: true },
+            { name: "Set", value: card.setId, inline: true },
+            {
+              name: "Stats",
+              value: `ATK ${card.atk} · DEF ${card.def} · HP ${card.hp}`,
+              inline: false,
+            },
+            { name: "Base value", value: String(card.baseValue), inline: true },
+          ],
+          footer: `Wiki: ${wikiUrl("bunnies")}`,
+        });
         break;
       }
 
       case "cards": {
         const user = await UserService.requireByDiscordId(id.discordId);
         const cards = await CardService.getUserCards(String(user._id), "available");
+        if (!cards.length) {
+          await reply(message, "No cards. Try `bd hunt` or `bd start`.");
+          break;
+        }
+        const first = cards[0];
+        const def = first?.cardDefinitionId as { name?: string; slug?: string } | undefined;
         const lines = cards.slice(0, 20).map((c) => {
-          const def = c.cardDefinitionId as { name?: string };
-          return `• \`${c._id}\` ${def?.name ?? "?"} (${c.variant})`;
+          const d = c.cardDefinitionId as { name?: string };
+          return `• \`${c._id}\` ${d?.name ?? "?"} (${c.variant})`;
         });
-        await reply(
-          message,
-          [`**Your cards** (${cards.length})`, ...lines].join("\n") || "No cards.",
-        );
+        await replyEmbed(message, {
+          title: `Your cards (${cards.length})`,
+          description: lines.join("\n"),
+          slug: def?.slug,
+        });
         break;
       }
 
@@ -221,13 +298,15 @@ export async function handleCommand(message: Message, args: string[]) {
         const setLines = progress.sets.map(
           (s) => `• ${s.name}: ${s.owned}/${s.total}`,
         );
-        await reply(
-          message,
-          [
-            `Collection **${progress.completionPct}%** (${progress.unique}/${progress.catalogSize} unique)`,
+        await replyEmbed(message, {
+          title: `Collection ${progress.completionPct}%`,
+          description: [
+            `${progress.unique}/${progress.catalogSize} unique`,
             ...setLines,
           ].join("\n"),
-        );
+          slug: "aurora-myth",
+          footer: "Wiki: all bunny portraits on /wiki/bunnies",
+        });
         break;
       }
 

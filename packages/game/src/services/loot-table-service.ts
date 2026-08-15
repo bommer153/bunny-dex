@@ -35,6 +35,7 @@ export type ResolvedLoot =
       name: string;
       rarity: string;
       variant: Variant;
+      slug: string;
     };
 
 function weightedPick<T extends { weight: number }>(entries: T[]): T {
@@ -188,6 +189,7 @@ export class LootTableService {
           name: def.name,
           rarity: def.rarity,
           variant,
+          slug: def.slug,
         };
       }
       default:

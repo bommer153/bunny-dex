@@ -1,3 +1,5 @@
+import { WikiCardStrip } from "@/components/wiki-card-art";
+
 export default function SocialWikiPage() {
   return (
     <article className="space-y-8">
@@ -7,6 +9,15 @@ export default function SocialWikiPage() {
           Two ways to exchange value: direct player trades, and the public coin market.
         </p>
       </header>
+
+      <WikiCardStrip
+        slugs={[
+          { slug: "prism-patron", name: "Prism Patron" },
+          { slug: "celestine-key", name: "Celestine Key" },
+          { slug: "eclipse-empress", name: "Eclipse Empress" },
+          { slug: "aurora-myth", name: "Aurora Myth" },
+        ]}
+      />
 
       <section className="space-y-3">
         <h2 className="font-display text-2xl text-meadow-400">Direct trade</h2>

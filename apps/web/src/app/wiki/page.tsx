@@ -1,4 +1,14 @@
+import { CARD_CATALOG } from "@/lib/wiki";
+import { WikiCardStrip } from "@/components/wiki-card-art";
+
+const FEATURED = ["meadow-hop", "cinder-monarch", "aurora-myth", "eclipse-empress"];
+
 export default function WikiHomePage() {
+  const featured = FEATURED.map((slug) => {
+    const card = CARD_CATALOG.find((c) => c.slug === slug);
+    return { slug, name: card?.name ?? slug };
+  });
+
   return (
     <article className="space-y-6">
       <header>
@@ -8,6 +18,8 @@ export default function WikiHomePage() {
           battle in three lanes, and trade on the marketplace — then manage everything on the web.
         </p>
       </header>
+
+      <WikiCardStrip slugs={featured} />
 
       <section className="grid gap-3 sm:grid-cols-2">
         {[
@@ -24,7 +36,7 @@ export default function WikiHomePage() {
           {
             href: "/wiki/bunnies",
             title: "Bunnies & cards",
-            body: "Elements, rarities, variants, and sets.",
+            body: "31 bunnies across 4 sets, with portraits, elements, and stats.",
           },
           {
             href: "/wiki/economy",

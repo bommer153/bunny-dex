@@ -1,14 +1,19 @@
 import { COMMAND_GROUPS } from "@/lib/wiki";
+import { WikiCardArt } from "@/components/wiki-card-art";
 
 export default function CommandsWikiPage() {
   return (
     <article className="space-y-8">
-      <header>
-        <h1 className="font-display text-4xl text-meadow-400">Commands</h1>
-        <p className="mt-2 text-meadow-100/70">
-          All gameplay commands use the prefix <code className="text-meadow-400">bd</code> in
-          Discord. Example: <code className="text-meadow-400">bd hunt</code>.
-        </p>
+      <header className="grid gap-6 sm:grid-cols-[160px_1fr] sm:items-center">
+        <WikiCardArt slug="meadow-hop" name="Meadow Hop" href="/cards/meadow-hop" />
+        <div>
+          <h1 className="font-display text-4xl text-meadow-400">Commands</h1>
+          <p className="mt-2 text-meadow-100/70">
+            All gameplay commands use the prefix <code className="text-meadow-400">bd</code> in
+            Discord. Card lookups, hunts, packs, and wiki links include bunny portraits in the
+            embed.
+          </p>
+        </div>
       </header>
 
       {COMMAND_GROUPS.map((group) => (

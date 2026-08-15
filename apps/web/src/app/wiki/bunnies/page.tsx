@@ -1,8 +1,8 @@
-import { ELEMENTS, RARITIES, SETS, VARIANTS } from "@/lib/wiki";
+import { CARD_CATALOG, ELEMENTS, RARITIES, SETS, VARIANTS } from "@/lib/wiki";
 
 export default function BunniesWikiPage() {
   return (
-    <article className="space-y-8">
+    <article className="space-y-10">
       <header>
         <h1 className="font-display text-4xl text-meadow-400">Bunnies & cards</h1>
         <p className="mt-2 max-w-2xl text-meadow-100/70">
@@ -69,25 +69,54 @@ export default function BunniesWikiPage() {
         </ul>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="font-display text-2xl text-meadow-400">Sets</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {SETS.map((s) => (
-            <div key={s.id} className="rounded-2xl border border-meadow-700 bg-meadow-900/50 p-4">
-              <h3 className="font-display text-lg text-meadow-400">{s.name}</h3>
-              <p className="mt-1 text-sm text-meadow-100/65">{s.blurb}</p>
-              <p className="mt-2 font-mono text-xs text-meadow-100/40">{s.id}</p>
+      {SETS.map((set) => {
+        const cards = CARD_CATALOG.filter((c) => c.setId === set.id);
+        return (
+          <section key={set.id} className="space-y-4">
+            <div>
+              <h2 className="font-display text-2xl text-meadow-400">{set.name}</h2>
+              <p className="text-sm text-meadow-100/65">
+                {set.blurb} · {cards.length} cards
+              </p>
             </div>
-          ))}
-        </div>
-        <p className="text-sm text-meadow-100/65">
-          Browse the live catalog on the{" "}
-          <a href="/cards" className="text-meadow-400 underline">
-            Cards
-          </a>{" "}
-          page, or use <code className="text-meadow-400">bd card &lt;name&gt;</code> in Discord.
-        </p>
-      </section>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {cards.map((card) => (
+                <a
+                  key={card.slug}
+                  href={`/cards/${card.slug}`}
+                  className="overflow-hidden rounded-2xl border border-meadow-700 bg-meadow-900/50 transition hover:border-meadow-400"
+                >
+                  <div className="aspect-square bg-meadow-950">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/cards/${card.slug}.png`}
+                      alt={card.name}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-1 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-display text-lg text-meadow-400">{card.name}</h3>
+                      {card.starter ? (
+                        <span className="rounded-full border border-meadow-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-meadow-400">
+                          Starter
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs capitalize text-meadow-100/55">
+                      {card.rarity} · {card.element}
+                    </p>
+                    <p className="text-sm text-meadow-100/70">{card.description}</p>
+                    <p className="text-xs text-meadow-100/50">
+                      ATK {card.atk} · DEF {card.def} · HP {card.hp}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </article>
   );
 }
