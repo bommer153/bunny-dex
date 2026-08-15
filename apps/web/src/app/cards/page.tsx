@@ -23,21 +23,34 @@ export default function CardsPage() {
         onChange={(e) => setQ(e.target.value)}
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
-          <a
-            key={String(c._id)}
-            href={`/cards/${c.slug}`}
-            className="rounded-xl border border-meadow-700 bg-meadow-900 p-4 transition hover:border-meadow-400"
-          >
-            <div className="font-display text-lg">{String(c.name)}</div>
-            <div className="text-sm text-meadow-100/60">
-              {String(c.rarity)} · {String(c.element)}
-            </div>
-            <div className="mt-2 text-sm">
-              ATK {String(c.atk)} · DEF {String(c.def)} · HP {String(c.hp)}
-            </div>
-          </a>
-        ))}
+        {cards.map((c) => {
+          const src = String(c.imageUrl || `/cards/${c.slug}.png`);
+          return (
+            <a
+              key={String(c._id)}
+              href={`/cards/${c.slug}`}
+              className="overflow-hidden rounded-xl border border-meadow-700 bg-meadow-900 transition hover:border-meadow-400"
+            >
+              <div className="aspect-square bg-meadow-950">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={String(c.name)}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="p-4">
+                <div className="font-display text-lg">{String(c.name)}</div>
+                <div className="text-sm text-meadow-100/60">
+                  {String(c.rarity)} · {String(c.element)}
+                </div>
+                <div className="mt-2 text-sm">
+                  ATK {String(c.atk)} · DEF {String(c.def)} · HP {String(c.hp)}
+                </div>
+              </div>
+            </a>
+          );
+        })}
       </div>
     </div>
   );

@@ -844,7 +844,7 @@ async function main() {
       {
         ...card,
         cardType: "bunny",
-        imageUrl: "",
+        imageUrl: `/cards/${card.slug}.png`,
         release: { releasedAt: new Date(), isLimited: card.rarity === "secret" },
         flags: {
           isStarter: card.flags?.isStarter ?? false,
