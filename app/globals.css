@@ -1,26 +1,251 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/*
+  BunnyDex tokens, taken from the card back (public/cards/BunnyDex Gold Bunny Card Back.png):
+  plum = app shell and panels (near-black plum → deep purple), gold = primary actions, selected states, rewards,
+  violet = gem accents. Text shades are lavender greys so values stay easy to read on plum.
+*/
+@theme {
+  --color-plum-100: #f4eefb;
+  --color-plum-200: #e4d9f2;
+  --color-plum-300: #cdbde3;
+  --color-plum-400: #ab98c9;
+  --color-plum-500: #8a74a6;
+  --color-plum-600: #634e80;
+  --color-plum-700: #46305f;
+  --color-plum-800: #301d48;
+  --color-plum-900: #201234;
+  --color-plum-950: #130a20;
+  --color-gold-200: #ffeaa8;
+  --color-gold-300: #ffdb6e;
+  --color-gold-400: #fbc94a;
+  --color-gold-500: #f0b12a;
+  --color-gold-600: #c98a12;
+  --color-gold-700: #8f600b;
+  --color-gem: #a855f7;
+  --color-gem-light: #d8b4fe;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 50% -120px, rgb(124 58 237 / 0.28), transparent 70%),
+    radial-gradient(900px 400px at 100% 100%, rgb(168 85 247 / 0.10), transparent 70%),
+    #0c0614;
+  background-attachment: fixed;
+  color: var(--color-plum-100);
 }
+
+/* ---- HUD pieces ---- */
+/* Small violet diamond (gem) used on tabs, badges, counters and section headers. */
+.gem {
+  display: inline-block; width: 0.55em; height: 0.55em; flex: none; transform: rotate(45deg);
+  background: linear-gradient(135deg, var(--color-gem-light), var(--color-gem) 55%, #6b21a8);
+  box-shadow: 0 0 0 1px var(--color-gold-500), 0 0 8px rgb(168 85 247 / 0.7);
+}
+/* Polished gold frame for hero moments (rare reveals, battle results, combines, closed auctions). */
+.gold-frame {
+  position: relative; border-radius: 1.25rem; padding: 3px;
+  background: linear-gradient(135deg, #fff1b8, var(--color-gold-500) 30%, var(--color-gold-700) 55%, var(--color-gold-400) 80%, #fff1b8);
+  box-shadow: 0 0 30px -6px rgb(240 177 42 / 0.45), 0 0 60px -20px rgb(168 85 247 / 0.6);
+}
+.gold-frame > .gold-frame-inner {
+  border-radius: calc(1.25rem - 3px);
+  background: radial-gradient(120% 90% at 50% 0%, #3a1b5e, var(--color-plum-950) 70%);
+}
+.gold-frame::before, .gold-frame::after {
+  content: ""; position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; transform: rotate(45deg);
+  background: linear-gradient(135deg, var(--color-gem-light), var(--color-gem) 55%, #6b21a8);
+  box-shadow: 0 0 0 2px var(--color-gold-500), 0 0 10px rgb(168 85 247 / 0.8); z-index: 1;
+}
+.gold-frame::before { left: -6px; }
+.gold-frame::after { right: -6px; }
+/* Gold text for wordmarks and big rewards. */
+.text-goldfoil {
+  background: linear-gradient(180deg, #fff3c4, var(--color-gold-400) 45%, var(--color-gold-600));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ---- Interaction animations (all turned off for prefers-reduced-motion) ---- */
+button { transition: transform 120ms ease, background-color 150ms ease, opacity 150ms ease; }
+button:not(:disabled):hover { transform: translateY(-1px); }
+button:not(:disabled):active { transform: scale(0.95); }
+
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes shake { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+@keyframes lane-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.anim-pop { animation: pop-in 280ms cubic-bezier(.2,.9,.3,1.3) both; }
+.anim-shake { animation: pop-in 200ms ease both, shake 400ms 200ms ease; }
+.anim-lane { animation: lane-in 400ms ease both; }
+
+.card-tile { transition: transform 200ms ease, box-shadow 200ms ease; }
+.card-tile:hover { transform: translateY(-4px) rotate(-0.6deg); box-shadow: 0 12px 28px -10px rgb(168 85 247 / 0.45), 0 0 0 1px rgb(240 177 42 / 0.35); }
+/* Legendary and up get a moving shine. */
+.card-shine { position: relative; overflow: hidden; }
+.card-shine::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(110deg, transparent 35%, rgb(255 255 255 / 0.18) 50%, transparent 65%) 0 0 / 200% 100%;
+  animation: shimmer 3.5s linear infinite;
+}
+.spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 9999px; animation: spin 700ms linear infinite; vertical-align: -0.1em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---- Combine Lab: --amp / --amp-panel / --glow are ramped up from JS while combining ---- */
+@keyframes lab-jitter {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(calc(var(--amp) * 1px), calc(var(--amp) * -0.6px)) rotate(calc(var(--amp) * 0.3deg)); }
+  50% { transform: translate(calc(var(--amp) * -0.9px), calc(var(--amp) * 0.7px)) rotate(calc(var(--amp) * -0.3deg)); }
+  75% { transform: translate(calc(var(--amp) * 0.6px), calc(var(--amp) * 0.9px)) rotate(calc(var(--amp) * 0.15deg)); }
+}
+@keyframes lab-quake {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(calc(var(--amp-panel) * 1px), calc(var(--amp-panel) * 0.5px)); }
+  66% { transform: translate(calc(var(--amp-panel) * -1px), calc(var(--amp-panel) * -0.5px)); }
+}
+@keyframes lab-pulse { from { transform: scale(1); filter: brightness(1); } to { transform: scale(1.15); filter: brightness(1.6); } }
+@keyframes lab-land { from { transform: scale(1.12); filter: brightness(1.7); } to { transform: scale(1); filter: none; } }
+@keyframes lab-flash { 0% { opacity: 0; transform: scale(0.3); } 40% { opacity: 1; } 100% { opacity: 0.9; transform: scale(2.5); } }
+
+.lab-shaking { animation: lab-quake 130ms linear infinite; }
+.lab-shaking .lab-slot { animation: lab-jitter 90ms linear infinite; box-shadow: 0 0 calc(var(--glow) * 1px) calc(var(--glow) * 0.15px) var(--glow-color), 0 0 calc(var(--glow) * 1.6px) rgb(139 92 246 / 0.6); }
+.lab-land { animation: lab-land 350ms ease-out; }
+.lab-aura {
+  position: absolute; inset: 0; pointer-events: none; transition: opacity 300ms ease;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--glow-color) 30%, transparent), transparent 55%),
+    radial-gradient(circle at 50% 45%, rgb(139 92 246 / 0.35), transparent 70%); /* violet fusion energy */
+}
+.lab-shaking .lab-aura { animation: lab-pulse 380ms ease-in-out infinite alternate; }
+.lab-flash {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 40%, #fff 0%, var(--glow-color) 25%, rgb(168 85 247 / 0.8) 45%, transparent 75%);
+  animation: lab-flash 300ms ease-out forwards;
+}
+
+/* ---- Shared DOM effects (Burst, Stamp) ---- */
+@keyframes fx-fly {
+  from { transform: translate(0, 0) scale(0.5) rotate(0deg); opacity: 1; }
+  70% { opacity: 1; }
+  to { transform: translate(var(--dx), var(--dy)) scale(1) rotate(var(--rot)); opacity: 0; }
+}
+.fx-particle { position: absolute; font-size: 1rem; line-height: 1; animation: fx-fly 750ms cubic-bezier(.15,.7,.35,1) both; }
+@keyframes fx-stamp {
+  0% { transform: scale(2.4) rotate(-14deg); opacity: 0; }
+  28% { transform: scale(0.94) rotate(-8deg); opacity: 1; }
+  38% { transform: scale(1.04) rotate(-8deg); }
+  85% { opacity: 1; }
+  100% { transform: scale(1) rotate(-8deg); opacity: 0; }
+}
+.fx-stamp {
+  font: 800 clamp(2rem, 8vw, 4.5rem)/1 var(--font-sans); padding: 0.2em 0.55em; border: 0.1em solid currentColor; border-radius: 0.2em;
+  text-transform: uppercase; letter-spacing: 0.05em; background: rgb(9 9 11 / 0.65); animation: fx-stamp 1400ms cubic-bezier(.2,.8,.3,1) both;
+}
+.fx-stamp-gold { color: #facc15; text-shadow: 0 0 24px rgb(250 204 21 / 0.6); }
+.fx-stamp-violet { color: #d8b4fe; text-shadow: 0 0 24px rgb(168 85 247 / 0.7); }
+.fx-stamp-grey { color: #a1a1aa; }
+@keyframes fx-glow-ring { from { box-shadow: 0 0 0 0 rgb(250 204 21 / 0.7); } to { box-shadow: 0 0 0 14px rgb(250 204 21 / 0); } }
+.fx-highlight { animation: fx-glow-ring 900ms ease-out 2; }
+
+/* ---- Card tiles: staggered entrance, pointer tilt (vars set by TiltEffect), preview dialog ---- */
+@keyframes rise-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+.anim-rise { animation: rise-in 360ms cubic-bezier(.2,.8,.3,1) backwards; } /* backwards: hover transforms still work after */
+.tilt { transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 120ms ease-out, box-shadow 200ms ease; }
+.tilt:hover { transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-4px); }
+.tilt:focus-within { box-shadow: 0 0 0 2px #f0b12a, 0 14px 30px -12px rgb(168 85 247 / 0.6); }
+.fx-dialog[open] { animation: pop-in 260ms cubic-bezier(.2,.9,.3,1.2) both; }
+.fx-dialog::backdrop { animation: fade-in 200ms ease both; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lab-red { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 30% { box-shadow: inset 0 0 0 3px #ef4444, 0 0 30px -6px #ef4444; } }
+.lab-reject { animation: lab-red 600ms ease, shake 400ms ease; }
+@keyframes lab-puff { from { filter: none; } 50% { filter: grayscale(1) brightness(1.4) blur(1px); } to { filter: grayscale(1) brightness(0.6); } }
+.lab-fizzle .lab-slot { animation: lab-puff 750ms ease forwards; }
+
+/* ---- Burrow tunnel: rings rush past while a hole opens onto the page (pure CSS, never blocks) ---- */
+@property --hole { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+@keyframes tunnel-open {
+  0% { --hole: 0%; opacity: 1; background-size: 100% 100%; }
+  70% { opacity: 1; }
+  100% { --hole: 85%; opacity: 0; background-size: 320% 320%; visibility: hidden; }
+}
+.fx-tunnel {
+  position: fixed; inset: 0; z-index: 40; pointer-events: none; background-position: center;
+  background-image: repeating-radial-gradient(circle at center, #1a0b2e 0 18px, #5b2a8c 18px 34px, #10061c 34px 46px); /* violet portal */
+  -webkit-mask-image: radial-gradient(circle at center, transparent var(--hole), #000 calc(var(--hole) + 6%));
+  mask-image: radial-gradient(circle at center, transparent var(--hole), #000 calc(var(--hole) + 6%));
+  animation: tunnel-open 750ms cubic-bezier(.6,0,.4,1) forwards;
+}
+@keyframes dig { from { transform: scale(0.6); opacity: 0.9; } to { transform: scale(2.2); opacity: 0; } }
+.fx-dig { position: absolute; inset: -6px; border-radius: 9999px; border: 3px solid #a855f7; animation: dig 650ms ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .fx-tunnel { display: none; } }
+
+/* ---- Guide steps, auction hammer ---- */
+@keyframes step-r { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes step-l { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+.anim-step-r { animation: step-r 320ms cubic-bezier(.2,.8,.3,1) both; }
+.anim-step-l { animation: step-l 320ms cubic-bezier(.2,.8,.3,1) both; }
+@keyframes key-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(240 177 42 / 0); } 50% { box-shadow: 0 0 0 3px rgb(240 177 42 / 0.6); } }
+.guide-key { animation: rise-in 360ms cubic-bezier(.2,.8,.3,1) backwards, key-pulse 1.2s ease 500ms 2; }
+@keyframes gavel { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-35deg); } 45% { transform: rotate(10deg); } }
+.fx-gavel { display: inline-block; transform-origin: 80% 80%; animation: gavel 1s ease-in-out infinite; }
+
+/* ---- HUD chrome ---- */
+@keyframes glow-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(240 177 42 / 0); } 50% { box-shadow: 0 0 14px 1px rgb(240 177 42 / 0.55); } }
+.fx-glow { animation: glow-pulse 2.4s ease-in-out infinite; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+.fx-sheet:popover-open { animation: sheet-up 240ms cubic-bezier(.2,.8,.3,1) both; }
+.fx-sheet::backdrop { animation: fade-in 200ms ease both; }
+html { scroll-padding-top: 9rem; } /* in-page links (#hunt, #work, #daily) land below the sticky header */
+
+/* ---- Guide mascot ---- */
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
+.fx-bob { animation: bob 2.6s ease-in-out infinite; }
+.speech::before { /* bubble tail pointing at the mascot */
+  content: ""; position: absolute; left: -7px; bottom: 12px; width: 12px; height: 12px; transform: rotate(45deg);
+  background: var(--color-plum-900); border-left: 1px solid rgb(240 177 42 / 0.4); border-bottom: 1px solid rgb(240 177 42 / 0.4);
+}
+
+/* ---- Gold seal (closed auctions) ---- */
+.fx-seal {
+  width: 11rem; height: 11rem; border-radius: 9999px; display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, #fff1b8, var(--color-gold-500) 40%, var(--color-gold-700) 80%);
+  box-shadow: inset 0 0 0 6px rgb(255 255 255 / 0.25), inset 0 0 0 10px var(--color-gold-600), 0 0 40px rgb(240 177 42 / 0.6), 0 0 80px -10px rgb(168 85 247 / 0.7);
+  animation: fx-stamp 1600ms cubic-bezier(.2,.8,.3,1) both;
+}
+.fx-seal-text { font: 900 2rem/1 var(--font-sans); color: #3b1d06; text-transform: uppercase; letter-spacing: 0.04em; text-shadow: 0 1px 0 rgb(255 255 255 / 0.5); }
+
+/* ---- Scene HUD frame (StageFrame) ---- */
+.stage-frame {
+  background: linear-gradient(135deg, #fff1b8, var(--color-gold-500) 22%, var(--color-gold-700) 50%, var(--color-gold-400) 78%, #fff1b8);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4), 0 0 24px -8px rgb(240 177 42 / 0.45), 0 0 50px -24px rgb(168 85 247 / 0.7);
+  transition: box-shadow 400ms ease;
+}
+.stage-frame-glow { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4), 0 0 36px -4px rgb(240 177 42 / 0.75), 0 0 80px -16px rgb(168 85 247 / 0.9); }
+
+/* Hunt: the face-down card is pressable. Glow + lift hint on hover/focus (the card itself is drawn in 3D underneath). */
+.hunt-card-hit { transition: box-shadow 200ms ease, transform 200ms ease; }
+.hunt-card-hit:hover, .hunt-card-hit:focus-visible {
+  box-shadow: 0 0 0 2px rgb(255 219 110 / 0.85), 0 0 36px 6px rgb(240 177 42 / 0.45), 0 0 70px 10px rgb(168 85 247 / 0.45);
+}
+
+/* ---- Multi-hunt flip cards: back = BunnyDex card back, front = art; gold border on both faces ---- */
+.flip-card { perspective: 700px; }
+.flip-inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 520ms cubic-bezier(.3,.7,.3,1.2); }
+.flip-inner.is-flipped { transform: rotateY(180deg); }
+.flip-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 8px; }
+.flip-front { transform: rotateY(180deg); }
+.card-border {
+  padding: 3px;
+  background: linear-gradient(135deg, #fff1b8, var(--color-gold-500) 28%, var(--color-gold-700) 52%, var(--color-gold-400) 78%, #fff1b8);
+}
+.flip-card:not(:disabled):hover .flip-inner { transform: translateY(-4px) rotate(-1.5deg); }
+.flip-card:not(:disabled):hover .card-border { box-shadow: 0 0 18px 2px rgb(240 177 42 / 0.55), 0 0 30px 4px rgb(168 85 247 / 0.4); }
+.flip-card:focus-visible { outline: 2px solid #ffdb6e; outline-offset: 3px; }

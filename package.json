@@ -6,12 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "bot": "tsx bot/index.ts",
+    "bot:dev": "tsx watch bot/index.ts",
+    "test": "node --import tsx --test game/rules.test.ts game/economy.test.ts bot/guide.test.ts bot/media.test.ts"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.35.0",
+    "discord.js": "^14.28.1",
+    "dotenv": "^18.0.10",
+    "gifenc": "^1.0.3",
+    "mongoose": "^9.12.1",
     "next": "16.3.4",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
