@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { CARDS, RARITIES } from "@/game/data/cards";
 import { RARITY_EMOJI } from "@/game/config";
 import { CardTile, Page, grid } from "../components";
@@ -9,11 +8,11 @@ export default async function CardsPage({ searchParams }: PageProps<"/cards">) {
   return (
     <Page title={`Cards (${shown.length})`}>
       <div className="flex flex-wrap gap-2 text-sm">
-        <Link href="/cards" className={`rounded-full px-3 py-1 ${!rarity ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>All</Link>
+        <a href="/cards" className={`rounded-full px-3 py-1 ${!rarity ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>All</a>
         {RARITIES.map((r) => (
-          <Link key={r} href={`/cards?rarity=${r}`} className={`rounded-full px-3 py-1 ${rarity === r ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>
+          <a key={r} href={`/cards?rarity=${r}`} className={`rounded-full px-3 py-1 ${rarity === r ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>
             {RARITY_EMOJI[r]} {r}
-          </Link>
+          </a>
         ))}
       </div>
       <div className={grid}>

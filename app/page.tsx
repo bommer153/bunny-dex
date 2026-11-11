@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { CARDS } from "@/game/data/cards";
 import { CONFIG } from "@/game/config";
 import Image from "next/image";
@@ -29,9 +28,9 @@ export default function Home() {
             here with the same account.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Link href="/profile#hunt" className={`${button} px-5 py-2 text-base`}>🌿 Start hunting</Link>
-            <Link href="/cards" className={`${ghostButton} px-4 py-2`}>Browse cards</Link>
-            <Link href="/guide" className={`${ghostButton} px-4 py-2`}>📖 Guide</Link>
+            <a href="/profile#hunt" className={`${button} px-5 py-2 text-base`}>🌿 Start hunting</a>
+            <a href="/cards" className={`${ghostButton} px-4 py-2`}>Browse cards</a>
+            <a href="/guide" className={`${ghostButton} px-4 py-2`}>📖 Guide</a>
           </div>
         </div>
         <div className="gold-frame mx-auto w-64 sm:w-72">
