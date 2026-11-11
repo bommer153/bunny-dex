@@ -18,7 +18,7 @@ import {
   availableCards, battleReply, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
-import { cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
+import { asPlayer, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
 import { nextMinBid } from "../game/rules";
@@ -52,13 +52,15 @@ client.on(Events.MessageCreate, async (msg) => {
   if (!m) return;
   const [, name = "menu", rest = ""] = m;
   try {
-    const reply = await runCommand(msg, name.toLowerCase(), rest.split(/\s+/).filter(Boolean));
-    if (reply) {
-      await animate(reply, async (r) => {
-        const m = await msg.reply({ ...r, allowedMentions: { repliedUser: false, parse: ["users"] } });
-        return (next) => m.edit(updateWith(next));
-      });
-    }
+    await asPlayer(msg.author, msg.member, async () => {
+      const reply = await runCommand(msg, name.toLowerCase(), rest.split(/\s+/).filter(Boolean));
+      if (reply) {
+        await animate(reply, async (r) => {
+          const m = await msg.reply({ ...r, allowedMentions: { repliedUser: false, parse: ["users"] } });
+          return (next) => m.edit(updateWith(next));
+        });
+      }
+    });
   } catch (e) {
     await msg.reply({ content: errorText(e), allowedMentions: { repliedUser: false } }).catch(() => {});
   }
@@ -350,7 +352,7 @@ async function refreshPanel(channel: Interaction["channel"], messageId: string, 
 
 client.on(Events.InteractionCreate, async (i) => {
   try {
-    await handleInteraction(i);
+    await asPlayer(i.user, i.member, () => handleInteraction(i));
   } catch (e) {
     if (!i.isRepliable()) return;
     const payload = { content: errorText(e), flags: MessageFlags.Ephemeral as const };

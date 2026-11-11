@@ -1,8 +1,25 @@
 import path from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
-  ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder,
-  type MessageActionRowComponentBuilder,
+  ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, GuildMember,
+  type MessageActionRowComponentBuilder, type User,
 } from "discord.js";
+
+/** The player whose message or click is being handled, so every embed can show their name and picture. */
+const viewer = new AsyncLocalStorage<{ name: string; iconURL: string }>();
+/** Runs `fn` with this player as the embed author (server nickname and avatar when available). */
+export function asPlayer<T>(user: User, member: unknown, fn: () => Promise<T>) {
+  const who = member instanceof GuildMember
+    ? { name: member.displayName, iconURL: member.displayAvatarURL() }
+    : { name: user.displayName, iconURL: user.displayAvatarURL() };
+  return viewer.run(who, fn);
+}
+/** A new embed headed with the current player's name and avatar (none for background posts like auction results). */
+export function embed() {
+  const e = new EmbedBuilder();
+  const who = viewer.getStore();
+  return who ? e.setAuthor(who) : e;
+}
 import { getCard, type CardDef, type Rarity } from "../game/data/cards";
 import { RARITY_EMOJI, variantInfo } from "../game/config";
 import { cardStats } from "../game/rules";
@@ -37,7 +54,7 @@ export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number
   const level = opts.level ?? 1;
   const s = cardStats(def, level);
   const v = opts.variant && opts.variant !== "normal" ? `${variantInfo(opts.variant).name} ` : "";
-  const e = new EmbedBuilder()
+  const e = embed()
     .setColor(RARITY_COLOR[def.rarity])
     .setTitle(opts.title ?? `${RARITY_EMOJI[def.rarity]} ${v}${def.name}`)
     .setDescription(`*${def.description}*`)
@@ -62,4 +79,4 @@ export function btn(id: string, label: string, style: ButtonStyle = ButtonStyle.
 
 export const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
 
-export const info = (text: string, color = BRAND) => new EmbedBuilder().setColor(color).setDescription(text);
+export const info = (text: string, color = BRAND) => embed().setColor(color).setDescription(text);

@@ -1,4 +1,4 @@
-import { ButtonStyle, EmbedBuilder, StringSelectMenuBuilder, UserSelectMenuBuilder, type Message, type MessageCreateOptions } from "discord.js";
+import { ButtonStyle, StringSelectMenuBuilder, UserSelectMenuBuilder, type Message, type MessageCreateOptions } from "discord.js";
 import { CARDS, RARITIES, findCard, getCard, type Rarity } from "../game/data/cards";
 // shortcut: no per-command rate limit beyond game cooldowns; add one if spam becomes a problem.
 import { COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ITEMS, RARITY_EMOJI, itemInfo } from "../game/config";
@@ -12,7 +12,7 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import { fx } from "./fx";
-import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
+import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, embed, info, mention, row } from "./ui";
 
 /** `frames` are shown first, one after another, by editing the message (a simple Discord "animation"). */
 /** `frames` play first (message edits). `ms` = how long this frame stays up (default 900ms). */
@@ -90,7 +90,7 @@ export async function renderMenu(uid: string, name: string): Promise<Reply> {
 export async function renderCollection(uid: string, page = 1, rarity?: Rarity): Promise<Reply> {
   const res = await cards.listCards(uid, { page, rarity });
   const prog = await cards.collectionProgress(uid);
-  const e = new EmbedBuilder()
+  const e = embed()
     .setColor(BRAND)
     .setTitle(`📚 Collection${rarity ? ` · ${rarity}` : ""}`)
     .setDescription(res.cards.length ? res.cards.map(cardLine).join("\n") : "No cards here yet. Try `bd hunt`!")
@@ -306,7 +306,7 @@ const commands: Record<string, Handler> = {
     const [p, en] = await Promise.all([player.profile(target), player.getEnergy(target)]);
     const u = p.user;
     const name = target === uid ? myName : (u.username || target);
-    const e = new EmbedBuilder()
+    const e = embed()
       .setColor(BRAND)
       .setTitle(`🐰 ${name}`)
       .addFields(
@@ -635,7 +635,7 @@ export async function callCommand(name: string, ctx: Ctx): Promise<Reply> {
   const handler = resolveCommand(name);
   if (!handler) return { content: `Unknown command \`${name}\`. See \`${P} help\`.` };
   const out = await handler(ctx);
-  return typeof out === "string" ? { content: out } : out;
+  return typeof out === "string" ? { embeds: [info(out)] } : out; // an embed, so it carries the player header too
 }
 
 export async function runCommand(msg: Message, name: string, args: string[]) {
