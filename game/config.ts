@@ -55,13 +55,13 @@ export const CONFIG = {
 } as const;
 
 export const RARITY_WEIGHT: Record<Rarity, number> = {
-  common: 600,
+  common: 679, // rare+ odds halved (was 600/250/100/35/10/4/1)
   uncommon: 250,
-  rare: 100,
-  epic: 35,
-  legendary: 10,
-  mythic: 4,
-  secret: 1,
+  rare: 50,
+  epic: 15,
+  legendary: 4,
+  mythic: 1.5,
+  secret: 0.5,
 };
 
 /** Combine: chance that `combineCount` cards of this rarity upgrade to the next one. Lower for higher rarities. */

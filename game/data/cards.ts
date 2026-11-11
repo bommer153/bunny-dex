@@ -409,6 +409,32 @@ export const CARDS: CardDef[] = [
     baseValue: 5500,
     setId: "nightveil",
   },
+
+  // Skyward: storm and sky bunnies (art: placeholder until real art is dropped in, see scripts/card-prompts.md)
+  { slug: "puffcloud", name: "Puffcloud", description: "So fluffy it gets mistaken for a passing cloud.", rarity: "common", element: "light", atk: 2, def: 3, hp: 8, baseValue: 21, setId: "skyward" },
+  { slug: "static-sprout", name: "Static Sprout", description: "Its fur crackles with every hop.", rarity: "common", element: "electric", atk: 3, def: 1, hp: 6, baseValue: 24, setId: "skyward" },
+  { slug: "kite-tail", name: "Kite Tail", description: "Rides the spring breeze on a long, ribbon-like tail.", rarity: "common", element: "nature", atk: 2, def: 2, hp: 8, baseValue: 20, setId: "skyward" },
+  { slug: "drizzle-dash", name: "Drizzle Dash", description: "Darts between raindrops just before the thunder.", rarity: "uncommon", element: "electric", atk: 4, def: 2, hp: 9, baseValue: 48, setId: "skyward" },
+  { slug: "dawn-glider", name: "Dawn Glider", description: "Glides on the first warm air of the morning.", rarity: "uncommon", element: "light", atk: 3, def: 4, hp: 9, baseValue: 52, setId: "skyward" },
+  { slug: "stormcaller-lop", name: "Stormcaller Lop", description: "Its ears twitch, and the sky answers.", rarity: "rare", element: "electric", atk: 7, def: 3, hp: 10, baseValue: 135, setId: "skyward" },
+  { slug: "sunbeam-sentinel", name: "Sunbeam Sentinel", description: "Stands guard where the sunlight breaks through the clouds.", rarity: "rare", element: "light", atk: 5, def: 6, hp: 12, baseValue: 130, setId: "skyward" },
+  { slug: "thunderhop-ace", name: "Thunderhop Ace", description: "A sky racer that outruns its own thunderclap.", rarity: "epic", element: "electric", atk: 9, def: 4, hp: 13, baseValue: 300, setId: "skyward" },
+  { slug: "zephyr-monk", name: "Zephyr Monk", description: "Meditates on mountain peaks, perfectly balanced on the wind.", rarity: "epic", element: "nature", atk: 7, def: 7, hp: 15, baseValue: 290, setId: "skyward" },
+  { slug: "tempest-regent", name: "Tempest Regent", description: "Rules the storms above the cloud kingdom.", rarity: "legendary", element: "electric", atk: 12, def: 7, hp: 17, baseValue: 860, setId: "skyward" },
+  { slug: "solstice-seraph", name: "Solstice Seraph", description: "Appears once a year, when the sun stands still.", rarity: "mythic", element: "light", atk: 13, def: 11, hp: 22, baseValue: 2100, setId: "skyward" },
+
+  // Bloomwood: frosty forest bunnies (art: placeholder until real art is dropped in)
+  { slug: "acorn-nibbler", name: "Acorn Nibbler", description: "Stuffs its cheeks with acorns for the winter.", rarity: "common", element: "nature", atk: 2, def: 3, hp: 8, baseValue: 20, setId: "bloomwood" },
+  { slug: "mossback", name: "Mossback", description: "Sits so still that moss grows on its back.", rarity: "common", element: "nature", atk: 1, def: 4, hp: 10, baseValue: 18, setId: "bloomwood" },
+  { slug: "snowdrop-kit", name: "Snowdrop Kit", description: "Born beneath the first snowdrop flower of the year.", rarity: "common", element: "ice", atk: 2, def: 2, hp: 7, baseValue: 21, setId: "bloomwood" },
+  { slug: "fernshade", name: "Fernshade", description: "Vanishes among the ferns at twilight.", rarity: "uncommon", element: "shadow", atk: 4, def: 3, hp: 9, baseValue: 47, setId: "bloomwood" },
+  { slug: "hoarfrost-hare", name: "Hoarfrost Hare", description: "Leaves frosted pawprints, even in summer.", rarity: "uncommon", element: "ice", atk: 3, def: 4, hp: 10, baseValue: 50, setId: "bloomwood" },
+  { slug: "bramble-knight", name: "Bramble Knight", description: "Wears armor woven from thorny brambles.", rarity: "rare", element: "nature", atk: 6, def: 5, hp: 11, baseValue: 125, setId: "bloomwood" },
+  { slug: "mistwood-seer", name: "Mistwood Seer", description: "Reads the future in the forest fog.", rarity: "rare", element: "shadow", atk: 6, def: 4, hp: 11, baseValue: 128, setId: "bloomwood" },
+  { slug: "glacier-bloom", name: "Glacier Bloom", description: "A frozen flower blooms between its ears.", rarity: "epic", element: "ice", atk: 8, def: 6, hp: 14, baseValue: 295, setId: "bloomwood" },
+  { slug: "elder-oakheart", name: "Elder Oakheart", description: "The oldest bunny in the wood, rooted like an ancient oak.", rarity: "legendary", element: "nature", atk: 10, def: 9, hp: 19, baseValue: 830, setId: "bloomwood" },
+  { slug: "frostfang-wraith", name: "Frostfang Wraith", description: "A spectral hare that haunts the frozen wood.", rarity: "mythic", element: "shadow", atk: 14, def: 10, hp: 21, baseValue: 2150, setId: "bloomwood" },
+  { slug: "verdant-crown", name: "Verdant Crown", description: "Legend says the whole forest grows from its crown.", rarity: "secret", element: "nature", atk: 15, def: 12, hp: 25, baseValue: 5200, setId: "bloomwood" },
 ];
 
 export const CARD_BY_SLUG = new Map(CARDS.map((c) => [c.slug, c]));

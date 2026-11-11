@@ -28,7 +28,7 @@ test("clover raises rare+ rate", () => {
     return n / 20000;
   };
   const base = rate(false), boosted = rate(true);
-  assert.ok(base > 0.1 && base < 0.2, `base ${base}`);
+  assert.ok(base > 0.05 && base < 0.09, `base ${base}`);
   assert.ok(boosted > base * 1.6, `boosted ${boosted} vs ${base}`);
 });
 
@@ -162,4 +162,11 @@ test("auto combine: keeps your best copy of each bunny, picks cheapest spares of
   assert.ok(picked.includes("a2") && picked.includes("a3") && picked.some((x) => x.startsWith("b")), `${picked}`);
   assert.equal(autoPick(cards, "rare"), null); // only one spare rare
   assert.equal(autoPick([mk("x", a.slug), mk("y", b.slug), mk("z", a.slug)]), null);
+});
+
+test("every card has art in public/cards", async () => {
+  const { existsSync } = await import("node:fs");
+  const missing = CARDS.filter((c) => !existsSync(`public/cards/${c.slug}.png`)).map((c) => c.slug);
+  assert.deepEqual(missing, [], "run: npx tsx scripts/placeholder-art.ts");
+  assert.equal(new Set(CARDS.map((c) => c.slug)).size, CARDS.length, "duplicate slug");
 });
