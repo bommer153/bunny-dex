@@ -105,7 +105,8 @@ export async function renderMenu(uid: string, name: string): Promise<Reply> {
       row(m("col", "📚 Collection"), m("burrow", "🕳️ Burrow"), m("combine", "🧪 Combine"), m("deck", "🛡️ Deck"), m("dex", "📖 Dex")),
       row(m("shop", "🛒 Shop"), m("inv", "🎒 Inventory"), m("market", "🏪 Market"), m("auction", "🔨 Auctions"), m("lb", "🏆 Top")),
       row(m("quests", "📜 Quests"), m("tower", "🏰 Tower"), m("shard", "💠 Shards"), m("news", "📰 News"), m("help", "❓ Help")),
-      row(m(next[0], `▶️ Do this next: ${next[1]}`, ButtonStyle.Success)),
+      // Own action ("next"): the same command already has a button above, and Discord rejects duplicate custom_ids (error 50035).
+      row(btn(cid("next", next[0], uid), `▶️ Do this next: ${next[1]}`, ButtonStyle.Success)),
     ],
   };
 }
@@ -859,7 +860,7 @@ export function errorButtons(message: string, code: string | undefined, uid: str
     : code === "INSUFFICIENT_FUNDS" && !named.length ? ["work", "daily"]
     : /card|code/i.test(message) && code !== "COOLDOWN" ? ["col"]
     : [];
-  const cmds = [...new Set([...named, ...fix])].filter((c) => c.length <= 60).slice(0, 4);
+  const cmds = [...new Set([...named, ...fix])].filter((c) => c.length <= 60 && c !== "menu").slice(0, 4); // "menu" already has its own button (duplicate ids are rejected)
   return [row(...cmds.map((c, i) => btn(cid("menu", c, uid), LABEL[c] ?? `▶️ ${P} ${c}`, i ? ButtonStyle.Secondary : ButtonStyle.Primary)), btn(cid("menu", "menu", uid), "🏠 Menu"))];
 }
 

@@ -229,6 +229,7 @@ async function handleInteraction(i: Interaction) {
         const r = await player.buyItem(uid, sub, Number(code) || 1);
         return void (await i.update(updateWith(await renderShop(uid, sub, r.qty, `🛒 Bought ${r.item.name} ×${r.qty} for ${coins(r.cost)}.`))));
       }
+      case "next": // menu home "Do this next" button: same as a menu button
       case "menu": {
         // One message per flow: the screen changes in place instead of posting a new message.
         if (arg === "menu") return void (await i.update(updateWith(await renderMenu(uid, i.user.displayName))));
