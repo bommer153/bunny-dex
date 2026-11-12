@@ -16,7 +16,7 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import {
-  UNLOCKED, availableCards, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderTrade, runCommand,
+  UNLOCKED, availableCards, errorButtons, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderShop, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
 import { asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
@@ -42,6 +42,9 @@ const errorText = (e: unknown) => {
   return "❌ Something went wrong. Try again in a moment.";
 };
 
+/** Error text plus suggested next-step buttons (e.g. "Buy some in `bd shop`" gets a Shop button). */
+const errorReply = (e: unknown, uid: string) => ({ content: errorText(e), components: errorButtons(e instanceof GameError ? e.message : "", e instanceof GameError ? e.code : undefined, uid) });
+
 const dm = (id: string, text: string) => client.users.fetch(id).then((u) => u.send(text)).catch(() => {}); // DMs may be closed
 
 // ================= Text commands =================
@@ -63,7 +66,7 @@ client.on(Events.MessageCreate, async (msg) => {
       }
     });
   } catch (e) {
-    await msg.reply({ content: errorText(e), allowedMentions: { repliedUser: false } }).catch(() => {});
+    await msg.reply({ ...errorReply(e, msg.author.id), allowedMentions: { repliedUser: false } }).catch(() => {});
   }
 });
 
@@ -208,6 +211,12 @@ async function handleInteraction(i: Interaction) {
     switch (action) {
       case "hunt":
         return animate(await doHunt(uid, Number(arg) || 1), onReply(i));
+      case "shopq":
+        return void (await i.update(updateWith(await renderShop(uid, sub, Number(code) || 1))));
+      case "shopgo": {
+        const r = await player.buyItem(uid, sub, Number(code) || 1);
+        return void (await i.update(updateWith(await renderShop(uid, sub, r.qty, `🛒 Bought ${r.item.name} ×${r.qty} for ${coins(r.cost)}.`))));
+      }
       case "menu": {
         if (arg === "menu") return void (await i.reply(await renderMenu(uid, i.user.displayName)));
         const [cmd, ...args] = arg.split(" ");
@@ -342,7 +351,7 @@ async function handleInteraction(i: Interaction) {
         if (r.outbidId) void dm(r.outbidId, `📉 You were outbid on auction \`${code}\` (${getCard(a.slug).name}). Your ${r.refunded.toLocaleString()} coins were refunded.`);
         if (r.settled) void announceAuction(r.settled);
         await i.update(updateWith(await renderAuction(code)));
-        return void (await i.followUp({ content: r.isBuyout ? "💰 Bought out! The card is yours." : `✅ You're the top bidder at ${coins(amount)}.`, flags: MessageFlags.Ephemeral }));
+        return void (await i.followUp({ content: r.isBuyout ? "💰 Bought out! The card is yours." : `✅ You're the top bidder at ${coins(amount)}.`, components: nextButtons("auction", uid), flags: MessageFlags.Ephemeral }));
       }
       case "mkt": {
         const r = await market.buyListing(uid, code);
@@ -372,10 +381,7 @@ async function handleInteraction(i: Interaction) {
       const [what, target] = arg.split(":");
       return void (await i.update(updateWith(await callCommand(what, ctxOf(i, [target, ...i.values])))));
     }
-    if (action === "shopbuy") {
-      const r = await player.buyItem(uid, i.values[0], Number(arg) || 1);
-      return void (await i.reply({ content: `🛒 Bought ${r.item.name} ×${r.qty} for ${coins(r.cost)}.`, flags: MessageFlags.Ephemeral }));
-    }
+    if (action === "shopsel") return void (await i.update(updateWith(await renderShop(uid, i.values[0], Number(arg) || 1))));
     if (action === "decksel") {
       await cards.setDeck(uid, i.values);
       return void (await i.update(updateWith({ ...(await callCommand("deck", ctxOf(i))), content: "✅ Deck saved." })));
@@ -424,7 +430,7 @@ client.on(Events.InteractionCreate, async (i) => {
     await asPlayer(i.user, i.member, () => handleInteraction(i));
   } catch (e) {
     if (!i.isRepliable()) return;
-    const payload = { content: errorText(e), flags: MessageFlags.Ephemeral as const };
+    const payload = { ...errorReply(e, i.user.id), flags: MessageFlags.Ephemeral as const };
     await (i.replied || i.deferred ? i.followUp(payload) : i.reply(payload)).catch(() => {});
   }
 });

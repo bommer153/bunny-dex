@@ -491,22 +491,7 @@ const commands: Record<string, Handler> = {
     return renderBurrow(uid);
   },
 
-  async shop({ uid }) {
-    const { left, resetInMs } = await player.shopLimitsLeft(uid);
-    const lines = ITEMS.map((i) => {
-      const lim = i.dailyLimit ? ` · **${left[i.slug]}/${i.dailyLimit} left today**` : "";
-      return `**${i.name}** \`${i.slug}\` · ${coins(i.price)}${lim}\n${i.description}`;
-    });
-    const menu = (qty: number) =>
-      new StringSelectMenuBuilder()
-        .setCustomId(cid("shopbuy", String(qty), uid))
-        .setPlaceholder(`🛒 Buy ×${qty}`)
-        .addOptions(ITEMS.map((i) => ({ label: `${i.name} ×${qty}`.slice(0, 100), description: `${(i.price * qty).toLocaleString()} coins`, value: i.slug })));
-    return {
-      embeds: [info(`🛒 **Shop**: pick from the menus, or \`${P} buy <item> [qty]\`\n\n${lines.join("\n\n")}\n\n*Daily limits reset in ${formatDuration(resetInMs)}.*`)],
-      components: [row(menu(1)), row(menu(5))],
-    };
-  },
+  shop: ({ uid, args }) => renderShop(uid, args[0]?.toLowerCase(), Number(args[1]) || 1),
 
   async buy({ uid, args }) {
     const r = await player.buyItem(uid, need(args[0], "buy <item> [qty]").toLowerCase(), args[1] ? int(args[1], "Quantity") : 1);
@@ -812,6 +797,46 @@ const NEXT: Record<string, [cmd: string, label: string][]> = {
 export function nextButtons(cmd: string, uid: string) {
   const steps = (NEXT[ALIASES[cmd] ?? cmd] ?? []).map(([c, label], i) => btn(cid("menu", c, uid), label, i ? ButtonStyle.Secondary : ButtonStyle.Primary));
   return [row(...steps, btn(cid("menu", "menu", uid), "🏠 Menu"))];
+}
+
+const LABEL: Record<string, string> = {
+  ...Object.fromEntries(Object.values(NEXT).flat()),
+  daily: "📅 Daily", energy: "⚡ Energy", shard: "💠 Shards", work: "💼 Work", hunt: "🌿 Hunt", "trade cancel": "✖️ Cancel trade",
+};
+
+/** Buttons for an error: commands the message names (`bd shop`), plus a fix for the kind of error, so it's never a dead end. */
+export function errorButtons(message: string, code: string | undefined, uid: string) {
+  const named = [...message.matchAll(new RegExp("`" + P + " ([^`<@]+)`", "g"))].map((m) => m[1].trim());
+  const fix =
+    code === "COOLDOWN" && /energy/i.test(message) ? ["energy", "shop"]
+    : code === "INSUFFICIENT_FUNDS" && /shard/i.test(message) ? ["shard"]
+    : code === "INSUFFICIENT_FUNDS" && !named.length ? ["work", "daily"]
+    : /card|code/i.test(message) && code !== "COOLDOWN" ? ["col"]
+    : [];
+  const cmds = [...new Set([...named, ...fix])].filter((c) => c.length <= 60).slice(0, 4);
+  return [row(...cmds.map((c, i) => btn(cid("menu", c, uid), LABEL[c] ?? `▶️ ${P} ${c}`, i ? ButtonStyle.Secondary : ButtonStyle.Primary)), btn(cid("menu", "menu", uid), "🏠 Menu"))];
+}
+
+/** Shop: pick a product (menu) and a quantity (buttons), then press Buy. The choice lives in the customIds, so no state is kept. */
+export async function renderShop(uid: string, slug?: string, qty = 1, note?: string): Promise<Reply> {
+  const item = ITEMS.find((i) => i.slug === slug) ?? ITEMS[0];
+  const { left, resetInMs } = await player.shopLimitsLeft(uid);
+  const lines = ITEMS.map((i) => {
+    const lim = i.dailyLimit ? ` · **${left[i.slug]}/${i.dailyLimit} left today**` : "";
+    return `${i.slug === item.slug ? "▶️ " : ""}**${i.name}** \`${i.slug}\` · ${coins(i.price)}${lim}\n${i.description}`;
+  });
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(cid("shopsel", String(qty), uid))
+    .addOptions(ITEMS.map((i) => ({ label: i.name.slice(0, 100), description: `${i.price.toLocaleString()} coins each`, value: i.slug, default: i.slug === item.slug })));
+  qty = Math.min(100, Math.max(1, qty)); // buyItem allows 1–100
+  const step = (d: number) => btn(cid("shopq", `${item.slug}:${qty + d}`, uid), d > 0 ? `+${d}` : `−${-d}`, ButtonStyle.Secondary, qty + d < 1 || qty + d > 100);
+  const qtys = [step(-5), step(-1), btn(cid("noop", "qty", uid), `×${qty}`, ButtonStyle.Primary, true), step(1), step(5)];
+  const buy = btn(cid("shopgo", `${item.slug}:${qty}`, uid), `🛒 Buy ${item.name} ×${qty} · ${(item.price * qty).toLocaleString()} coins`.slice(0, 80), ButtonStyle.Success);
+  return {
+    content: note,
+    embeds: [info(`🛒 **Shop**: pick a product and quantity, then press Buy. Or type \`${P} buy <item> [qty]\`.\n\n${lines.join("\n\n")}\n\n*Daily limits reset in ${formatDuration(resetInMs)}.*`)],
+    components: [row(menu), row(...qtys), row(buy, btn(cid("menu", "inv", uid), "🎒 Inventory"), btn(cid("menu", "menu", uid), "🏠 Menu"))],
+  };
 }
 
 /** Runs a command by name. Used by text commands and by menu buttons, so both behave the same. */
