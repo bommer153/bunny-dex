@@ -72,7 +72,7 @@ body {
 
 /* ---- Interaction animations (all turned off for prefers-reduced-motion) ---- */
 button { transition: transform 120ms ease, background-color 150ms ease, opacity 150ms ease; }
-button:not(:disabled):hover { transform: translateY(-1px); }
+@media (hover: hover) { button:not(:disabled):hover { transform: translateY(-1px); } } /* real pointers only: on touch, :hover sticks after a tap */
 button:not(:disabled):active { transform: scale(0.95); }
 
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
@@ -86,7 +86,7 @@ button:not(:disabled):active { transform: scale(0.95); }
 .anim-lane { animation: lane-in 400ms ease both; }
 
 .card-tile { transition: transform 200ms ease, box-shadow 200ms ease; }
-.card-tile:hover { transform: translateY(-4px) rotate(-0.6deg); box-shadow: 0 12px 28px -10px rgb(168 85 247 / 0.45), 0 0 0 1px rgb(240 177 42 / 0.35); }
+@media (hover: hover) { .card-tile:hover { transform: translateY(-4px) rotate(-0.6deg); box-shadow: 0 12px 28px -10px rgb(168 85 247 / 0.45), 0 0 0 1px rgb(240 177 42 / 0.35); } } /* real pointers only: on touch, :hover sticks after a tap */
 /* Legendary and up get a moving shine. */
 .card-shine { position: relative; overflow: hidden; }
 .card-shine::after {
@@ -159,7 +159,7 @@ button:not(:disabled):active { transform: scale(0.95); }
 @keyframes rise-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
 .anim-rise { animation: rise-in 360ms cubic-bezier(.2,.8,.3,1) backwards; } /* backwards: hover transforms still work after */
 .tilt { transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 120ms ease-out, box-shadow 200ms ease; }
-.tilt:hover { transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-4px); }
+@media (hover: hover) { .tilt:hover { transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-4px); } } /* real pointers only: on touch, :hover sticks after a tap */
 .tilt:focus-within { box-shadow: 0 0 0 2px #f0b12a, 0 14px 30px -12px rgb(168 85 247 / 0.6); }
 .fx-dialog[open] { animation: pop-in 260ms cubic-bezier(.2,.9,.3,1.2) both; }
 .fx-dialog::backdrop { animation: fade-in 200ms ease both; }
@@ -249,3 +249,12 @@ html { scroll-padding-top: 9rem; } /* in-page links (#hunt, #work, #daily) land 
 .flip-card:not(:disabled):hover .flip-inner { transform: translateY(-4px) rotate(-1.5deg); }
 .flip-card:not(:disabled):hover .card-border { box-shadow: 0 0 18px 2px rgb(240 177 42 / 0.55), 0 0 30px 4px rgb(168 85 247 / 0.4); }
 .flip-card:focus-visible { outline: 2px solid #ffdb6e; outline-offset: 3px; }
+
+/* ---- Discord Activity (embedded): Discord already signed the player in. ---- */
+html[data-activity] .web-only { display: none; }
+/* Inside Discord: no rubber-band / pull-to-refresh dragging Discord's own frame. */
+html[data-activity], html[data-activity] body { overscroll-behavior: none; }
+
+/* ---- Touch ---- */
+/* No grey flash on tap and no double-tap-zoom delay on controls. */
+a, button, summary, label, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }

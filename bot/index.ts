@@ -238,7 +238,15 @@ async function handleInteraction(i: Interaction) {
       case "tower": {
         const r = await battle.towerFight(uid);
         const won = r.reward ? `🏰 Floor ${r.floor} cleared! ${coins(r.reward.coins)}${r.reward.shards ? ` + 💠 ${r.reward.shards}` : ""}` : r.winner === "a" ? "Already cleared." : `💥 Floor ${r.floor} held. Level up or rework your deck.`;
-        const next = [row(btn(cid("menu", "tower", uid), r.reward ? "🏰 Next floor" : "🏰 Try again", ButtonStyle.Primary), btn(cid("menu", "deck", uid), "🛡️ Deck"), btn(cid("menu", "menu", uid), "🏠 Menu"))];
+        // Straight into the next fight (or a retry); the preview button stays for players who want to scout first.
+        const beat = r.winner === "a";
+        const top = beat && r.floor >= CONFIG.towerMaxFloor;
+        const next = [row(
+          ...(top ? [] : [btn(cid("tower", "fight", uid), beat ? `⚔️ Climb floor ${r.floor + 1}` : `⚔️ Retry floor ${r.floor}`, ButtonStyle.Primary)]),
+          btn(cid("menu", "tower", uid), beat ? "🔭 Preview next" : "🔭 See floor"),
+          btn(cid("menu", "deck", uid), "🛡️ Deck"),
+          btn(cid("menu", "menu", uid), "🏠 Menu"),
+        )];
         return animate({ ...battleReply(r, i.user.displayName, `Floor ${r.floor}`, won), components: next }, onReply(i));
       }
       case "shard": {

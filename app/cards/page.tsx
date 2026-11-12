@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { CARDS, RARITIES } from "@/game/data/cards";
 import { RARITY_EMOJI, TRAITS } from "@/game/config";
 import { completedSets, setTitle } from "@/game/rules";
 import { collectionProgress } from "@/game/services/cards";
 import { getUid } from "../lib/session";
-import { CardTile, Page, grid } from "../components";
+import { CardTile, Page, gridDense } from "../components";
 
 export default async function CardsPage({ searchParams }: PageProps<"/cards">) {
   const { rarity } = await searchParams;
@@ -24,14 +25,14 @@ export default async function CardsPage({ searchParams }: PageProps<"/cards">) {
         </ul>
       )}
       <div className="flex flex-wrap gap-2 text-sm">
-        <a href="/cards" className={`rounded-full px-3 py-1 ${!rarity ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>All</a>
+        <Link href="/cards" className={`rounded-full px-3 py-1 ${!rarity ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>All</Link>
         {RARITIES.map((r) => (
-          <a key={r} href={`/cards?rarity=${r}`} className={`rounded-full px-3 py-1 ${rarity === r ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>
+          <Link key={r} href={`/cards?rarity=${r}`} className={`rounded-full px-3 py-1 ${rarity === r ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>
             {RARITY_EMOJI[r]} {r}
-          </a>
+          </Link>
         ))}
       </div>
-      <div className={grid}>
+      <div className={gridDense}>
         {shown.map((c, i) => <CardTile key={c.slug} slug={c.slug} href={`/cards/${c.slug}`} index={i} tilt missing={!!dex && !dex.ownedSlugs.has(c.slug)} />)}
       </div>
     </Page>

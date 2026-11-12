@@ -22,7 +22,10 @@ export default async function CardDetail({ params }: PageProps<"/cards/[slug]">)
         <div className="gold-frame"><div className="gold-frame-inner p-2">
         <CardStage slug={slug} name={def.name} rarity={def.rarity} mode="inspect" />
         </div></div>
-        <p className="mt-2 text-xs text-plum-400 text-center">Hover to tilt · drag or ← → to turn · F to flip</p>
+        <p className="mt-2 text-xs text-plum-400 text-center">
+          <span className="[@media(pointer:fine)]:hidden">Drag to turn · tap Flip card</span>
+          <span className="hidden [@media(pointer:fine)]:inline">Hover to tilt · drag or ← → to turn · F to flip</span>
+        </p>
       </div>
       <div className="flex flex-col gap-4">
         <Link href="/cards" className="text-sm text-plum-400 hover:text-white">← All cards</Link>

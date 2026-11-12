@@ -7,7 +7,16 @@ declare module "next-auth" {
   }
 }
 
+// The session cookie must also work when the site runs as a Discord Activity (inside Discord's iframe on *.discordsays.com).
+// Embedded = third-party context, so the cookie needs SameSite=None + Secure + Partitioned (CHIPS). Locally (http) keep the default.
+const secure = process.env.NODE_ENV === "production"; // browsers also accept Secure cookies on http://localhost
+export const SESSION_COOKIE = secure ? "__Secure-authjs.session-token" : "authjs.session-token";
+export const SESSION_COOKIE_OPTIONS = secure
+  ? { httpOnly: true, sameSite: "none" as const, path: "/", secure: true, partitioned: true }
+  : { httpOnly: true, sameSite: "lax" as const, path: "/", secure: false };
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  cookies: { sessionToken: { name: SESSION_COOKIE, options: SESSION_COOKIE_OPTIONS } },
   providers: [
     Discord({
       clientId: process.env.DISCORD_CLIENT_ID,

@@ -344,7 +344,7 @@ export default function CombineLab({ cards, spare }: { cards: LabCard[]; spare: 
           <h2 className="font-semibold">Your cards <span className="text-sm text-plum-500 font-normal">(available, not in your deck)</span></h2>
           <label className="flex items-center gap-2 text-xs text-plum-400">
             Sort
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded-md border border-plum-700 bg-plum-950/70 px-2 py-1 text-sm text-plum-100 focus:outline-none focus:ring-2 focus:ring-gold-400">
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded-md border border-plum-700 bg-plum-950/70 px-2 py-1 text-base sm:text-sm text-plum-100 focus:outline-none focus:ring-2 focus:ring-gold-400">
               <option value="rarity">Rarity: low → high</option>
               <option value="-rarity">Rarity: high → low</option>
               <option value="copies">Most copies first</option>

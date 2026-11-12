@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -8,6 +8,7 @@ import { getUid } from "./lib/session";
 import TiltEffect from "./fx/TiltEffect";
 import { DesktopNav, MobileNav } from "./hud/NavBar";
 import PlayerStatus from "./hud/PlayerStatus";
+import ActivityBoot from "./ActivityBoot";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -18,6 +19,9 @@ export const metadata: Metadata = {
   description: "Collect, trade, auction and battle bunny cards on Discord.",
   icons: "/brand/mascot.png",
 };
+
+// viewport-fit=cover so the safe-area insets (notch, home bar) are real on phones; the tab bar pads itself with them.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#140a22" };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const [session, uid] = await Promise.all([auth(), getUid()]);
@@ -40,14 +44,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/profile" className="flex items-center gap-2 rounded-full py-0.5 pl-0.5 pr-2 hover:bg-plum-800" title="Your profile">
                     {session.user.image ? (
                       // eslint-disable-next-line @next/next/no-img-element -- Discord CDN avatar; tiny, not worth an image-optimizer remote rule
-                      <img src={session.user.image} alt="" className="size-8 rounded-full ring-2 ring-gem/70" />
+                      <img src={session.user.image.replace("https://cdn.discordapp.com/", "/discordcdn/")} alt="" className="size-8 rounded-full ring-2 ring-gem/70" />
                     ) : <span className="grid size-8 place-items-center rounded-full bg-plum-800" aria-hidden>🐰</span>}
                     <span className="hidden max-w-32 truncate text-plum-200 md:inline">{session.user.name}</span>
                   </Link>
-                  <form action={logout}><button className="text-plum-500 hover:text-plum-100" title="Sign out">Sign out</button></form>
+                  <form action={logout} className="web-only"><button className="text-plum-500 hover:text-plum-100" title="Sign out">Sign out</button></form>
                 </>
               ) : (
-                <form action={login}><button className="rounded-md bg-indigo-500 px-3 py-1 font-medium hover:bg-indigo-400">Sign in with Discord</button></form>
+                <form action={login} className="web-only"><button className="rounded-md bg-indigo-500 px-3 py-1 font-medium hover:bg-indigo-400">Sign in with Discord</button></form>
               )}
             </div>
           </div>
@@ -55,6 +59,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </header>
         {children}
         <MobileNav />
+        <ActivityBoot clientId={process.env.DISCORD_CLIENT_ID ?? ""} signedIn={!!uid} />
       </body>
     </html>
   );

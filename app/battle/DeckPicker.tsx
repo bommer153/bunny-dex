@@ -49,7 +49,7 @@ export default function DeckPicker({ cards, deck, size, button, ghostButton }: {
       {picked.map((c) => <input key={c} type="hidden" name="codes" value={c} />)}
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="flex items-center gap-2 font-semibold"><span className="gem" aria-hidden /> Your deck</h2>
-        <span className="text-sm text-plum-400">Tap or drag up to {size} cards onto the lanes. Drag lane to lane to swap.</span>
+        <span className="text-sm text-plum-400">Tap a card to add it, tap a lane to empty it.<span className="hidden [@media(pointer:fine)]:inline"> Or drag cards onto lanes (lane to lane swaps).</span></span>
       </div>
 
       {/* Lane slots: tap one to empty it. */}
@@ -85,7 +85,7 @@ export default function DeckPicker({ cards, deck, size, button, ghostButton }: {
         <button type="button" className={ghostButton} onClick={() => setPicked([])} disabled={!picked.length}>Clear</button>
       </div>
 
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 lg:grid-cols-6">
         {cards.map((c) => {
           const lane = picked.indexOf(c.code);
           const on = lane >= 0;
@@ -99,7 +99,7 @@ export default function DeckPicker({ cards, deck, size, button, ghostButton }: {
                 aria-disabled={blocked}
                 aria-pressed={on}
                 aria-label={`${c.name}, level ${c.level}${on ? `, in lane ${lane + 1}. Tap to remove.` : blocked ? ", deck is full" : ". Tap to add to your deck."}`}
-                className={`card-tile relative flex w-full flex-col gap-2 rounded-xl bg-plum-900 p-3 text-left ring-2 ${on ? "ring-gold-400 shadow-[0_0_24px_-6px_rgb(240_177_42/0.7)]" : RING[c.rarity]} ${blocked ? "opacity-40" : ""} disabled:cursor-not-allowed`}
+                className={`card-tile relative flex w-full flex-col gap-1.5 rounded-xl bg-plum-900 p-2 text-left sm:p-3 ring-2 ${on ? "ring-gold-400 shadow-[0_0_24px_-6px_rgb(240_177_42/0.7)]" : RING[c.rarity]} ${blocked ? "opacity-40" : ""} disabled:cursor-not-allowed`}
               >
                 {on && (
                   <span className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-gold-500 px-2 py-0.5 text-xs font-bold text-plum-950 shadow">
@@ -107,9 +107,9 @@ export default function DeckPicker({ cards, deck, size, button, ghostButton }: {
                   </span>
                 )}
                 <Image src={`/cards/${c.slug}.png`} alt="" width={240} height={336} className="h-auto w-full rounded-lg" />
-                <span className="font-semibold">{RARITY_EMOJI[c.rarity]} {c.variant !== "normal" && `${variantInfo(c.variant).name} `}{c.name}</span>
-                <span className="text-xs text-plum-400">{c.stats} · <code className="text-plum-300">{c.code}</code></span>
-                <span className={`text-xs font-medium ${on ? "text-gold-300" : "text-plum-400"}`}>{on ? "✓ In deck · tap to remove" : blocked ? "Deck full · drag onto a lane to swap" : "+ Tap or drag to add"}</span>
+                <span className="text-sm font-semibold leading-tight">{RARITY_EMOJI[c.rarity]} {c.variant !== "normal" && `${variantInfo(c.variant).name} `}{c.name}</span>
+                <span className="text-[11px] text-plum-400 sm:text-xs">{c.stats}</span>
+                <span className={`text-xs font-medium ${on ? "text-gold-300" : "text-plum-400"}`}>{on ? "✓ In deck" : blocked ? "Deck full" : "+ Add"}</span>
               </button>
             </li>
           );

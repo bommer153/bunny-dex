@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { CARDS } from "@/game/data/cards";
 import { CONFIG } from "@/game/config";
 import Image from "next/image";
-import { CardTile, button, ghostButton, grid, panel } from "./components";
+import { CardTile, button, ghostButton, gridDense, panel } from "./components";
 import Today from "./Today";
 
 const FEATURED = ["eclipse-empress", "polar-sovereign", "cinder-monarch", "aurora-myth", "meadow-hop"];
@@ -30,9 +31,9 @@ export default function Home() {
             here with the same account.
           </p>
           <div className="flex flex-wrap gap-3">
-            <a href="/profile#hunt" className={`${button} px-5 py-2 text-base`}>🌿 Start hunting</a>
-            <a href="/cards" className={`${ghostButton} px-4 py-2`}>Browse cards</a>
-            <a href="/guide" className={`${ghostButton} px-4 py-2`}>📖 Guide</a>
+            <Link href="/profile#hunt" className={`${button} px-5 py-2 text-base`}>🌿 Start hunting</Link>
+            <Link href="/cards" className={`${ghostButton} px-4 py-2`}>Browse cards</Link>
+            <Link href="/guide" className={`${ghostButton} px-4 py-2`}>📖 Guide</Link>
           </div>
         </div>
         <div className="gold-frame mx-auto w-64 sm:w-72">
@@ -41,7 +42,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className={grid}>
+      <section className={gridDense}>
         {FEATURED.map((slug, i) => <CardTile key={slug} slug={slug} href={`/cards/${slug}`} index={i} tilt />)}
       </section>
       <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

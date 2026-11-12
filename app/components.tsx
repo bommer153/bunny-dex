@@ -28,22 +28,25 @@ export function CardTile({ slug, variant = "normal", level = 1, code, status, hr
   const def = getCard(slug);
   const s = cardStats(def, level);
   // `missing`: a Dex slot you haven't caught yet, shown as a dark silhouette so empty slots pull you to collect.
-  const art = <Image src={`/cards/${slug}.png`} alt={missing ? "Not caught yet" : def.name} width={240} height={336} className={`w-full h-auto rounded-lg ${missing ? "brightness-0 opacity-50" : ""}`} />;
+  // Art is full-bleed (has a background), so a pure-black silhouette is just a black square; a dark blur teases the bunny instead.
+  const art = missing
+    ? <div className="overflow-hidden rounded-lg"><Image src={`/cards/${slug}.png`} alt="Not caught yet" width={240} height={336} className="h-auto w-full scale-110 blur-[6px] brightness-[0.35] grayscale" /></div>
+    : <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={336} className="w-full h-auto rounded-lg" />;
   const stats = `Lv ${level} · ⚔️${s.atk} 🛡️${s.def} ❤️${s.hp} · ${def.element}`;
   const top = preview
     ? <CardPreview slug={slug} name={def.name} rarity={def.rarity} variant={variant} stats={stats} code={code}>{art}</CardPreview>
     : href ? <Link href={href}>{art}</Link> : art;
   return (
     <div
-      className={`card-tile rounded-xl bg-plum-900 p-3 ring-2 ${RARITY_RING[def.rarity]} flex flex-col gap-2 ${SHINY.has(def.rarity) ? "card-shine" : ""} ${tilt ? "tilt" : ""} ${index !== undefined ? "anim-rise" : ""}`}
+      className={`card-tile rounded-xl bg-plum-900 p-2 sm:p-3 ring-2 ${RARITY_RING[def.rarity]} flex flex-col gap-2 ${SHINY.has(def.rarity) ? "card-shine" : ""} ${tilt ? "tilt" : ""} ${index !== undefined ? "anim-rise" : ""}`}
       style={index !== undefined ? { animationDelay: `${Math.min(index, 12) * 35}ms` } : undefined}
     >
       {top}
       <div>
-        <div className={`font-semibold ${RARITY_TEXT[def.rarity]}`}>
+        <div className={`text-sm font-semibold leading-tight sm:text-base ${RARITY_TEXT[def.rarity]}`}>
           {RARITY_EMOJI[def.rarity]} {missing ? "???" : <>{variant !== "normal" && `${variantInfo(variant).name} `}{def.name}</>}
         </div>
-        <div className="text-xs text-plum-400">
+        <div className="text-[11px] text-plum-400 sm:text-xs">
           {missing ? `Not caught yet · ${def.element}` : stats}
           {code && <> · <code className="text-plum-300">{code}</code></>}
           {status && status !== "available" && <> · <em>{status}</em></>}
@@ -63,7 +66,8 @@ export function Flash({ ok, err }: { ok?: string; err?: string }) {
   );
 }
 
-export const input = "rounded-md border border-plum-700 bg-plum-950/70 px-2 py-1 text-sm w-full min-w-0 placeholder:text-plum-500 focus:outline-none focus:ring-2 focus:ring-gold-400";
+// text-base on phones: iOS Safari zooms the page into any focused field under 16px.
+export const input = "rounded-md border border-plum-700 bg-plum-950/70 px-2 py-1 text-base sm:text-sm w-full min-w-0 placeholder:text-plum-500 focus:outline-none focus:ring-2 focus:ring-gold-400";
 /** Primary action: polished gold. Disabled = dimmed + not-allowed cursor (callers also say why in the label). */
 export const button =
   "rounded-md bg-gradient-to-b from-gold-300 to-gold-500 px-3 py-1 text-sm font-semibold text-plum-950 shadow-[inset_0_1px_0_rgb(255_255_255/0.5),0_2px_10px_-2px_rgb(240_177_42/0.5)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
@@ -128,7 +132,9 @@ export function Page({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-export const grid = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4";
+export const grid = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4";
+/** Browse-only grids (catalog, featured): 3 per row on phones so a binder of 50+ cards isn't endless scrolling. */
+export const gridDense = "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4";
 
 export const coins = (n: number) => `🪙 ${n.toLocaleString()}`;
 
