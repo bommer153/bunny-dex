@@ -1,0 +1,13 @@
+{
+  "tool": "Built-in imagegen",
+  "assets": [
+    {
+      "name": "background",
+      "prompt": "Create a polished landscape 16:9 game activity BACKGROUND for BunnyDex, final intended size 1024x576. Reference image supplies the brand art direction: luminous purple and gold fantasy collectible card game, adorable white bunny mage, pink ears, purple gold-trimmed hood, rich glossy illustrated finish. This is a UI background overlay: keep the entire central 60 percent of width and central 70 percent of height exceptionally quiet, dark deep plum smooth gradient, no title, no central character, no objects in the center, no bright lights there. Cluster all artwork along outer edges and corners: left bottom edge a cropped charming bunny mage peeking inward with a purple and gold card; right bottom corner a small fan of gold-rimmed purple collectible cards with bunny silhouettes and a few gold coins; delicate magical golden sparkles, purple crystals and soft violet wisps at far corners. Corners richly illustrated, center clean dark negative space for interface. Elegant balanced framing, edges feel like an enchanted card collection table, no enclosing hard border. No text, letters, watermark, UI panels, buttons. Full bleed opaque background."
+    },
+    {
+      "name": "cover",
+      "prompt": "Create polished commercial game COVER ART for BunnyDex Discord Activity Shelf. Landscape 16:9, intended final 1024x576. Reference 1 defines bunny mage identity and richly rendered glossy purple/gold fantasy card game art. Reference 2 defines logo typography. Exact title 'BunnyDex', one word, correctly spelled, large extremely legible at thumbnail size, playful dimensional lettering: Bunny golden yellow, Dex pearly pale lavender, dark plum outline and subtle golden keyline. Place title in left-center covering roughly half canvas, generous outer safe margins. On right a large expressive adorable white bunny mage in purple hood with gold trim and gold bunny emblem, big purple eyes, pink ears, smiling and proudly holding a fan of three purple collectible cards with gold bunny symbols. Keep full ears inside canvas. Background: enchanting deep violet magical glow, scattered sparkling gold stars, subtle card silhouettes, a few small purple crystals and gold coins at lower corners. Strong clear visual hierarchy, title and bunny are hero focal points, polished illustrated game key art, dimensional highlights, saturated royal purple and luminous gold. No other text, no tagline, no buttons, no UI panels, no watermark. Full bleed opaque background."
+    }
+  ]
+}

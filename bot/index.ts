@@ -117,12 +117,22 @@ async function animate(reply: Reply, send: (r: Reply) => Promise<Edit>) {
     await tryMedia(f, edit).catch(() => {}); // message deleted mid-animation: nothing left to show
   }
 }
+// Acknowledge first, then send: Discord fails a click not answered within 3s ("didn't respond in time"),
+// and DB work plus a GIF upload from Railway can take longer than that. After a defer, edits have 15 minutes.
+const thinking = new WeakSet<Interaction>(); // deferReply'd: on error, drop the "thinking…" placeholder
+async function deferNew(i: ButtonInteraction | AnySelect) {
+  if (i.deferred || i.replied) return;
+  await i.deferReply();
+  thinking.add(i);
+}
 const onReply = (i: ButtonInteraction | AnySelect) => async (r: Reply): Promise<Edit> => {
-  await i.reply(withoutFrames(r));
+  await deferNew(i);
+  await i.editReply(updateWith(r));
   return (next) => i.editReply(updateWith(next));
 };
 const onUpdate = (i: ButtonInteraction) => async (r: Reply): Promise<Edit> => {
-  await i.update(updateWith(r));
+  if (!i.deferred && !i.replied) await i.deferUpdate();
+  await i.editReply(updateWith(r));
   return (next) => i.editReply(updateWith(next));
 };
 
@@ -220,6 +230,7 @@ async function handleInteraction(i: Interaction) {
     const [sub, code] = arg.split(":");
     switch (action) {
       case "hunt": {
+        await deferNew(i);
         const before = await readyQuests(uid);
         return animate(await withStatus(await doHunt(uid, Number(arg) || 1, i.guildId), uid, before), onReply(i));
       }
@@ -234,11 +245,13 @@ async function handleInteraction(i: Interaction) {
         // One message per flow: the screen changes in place instead of posting a new message.
         if (arg === "menu") return void (await i.update(updateWith(await renderMenu(uid, i.user.displayName))));
         const [cmd, ...args] = arg.split(" ");
+        await i.deferUpdate();
         return animate(await callCommand(cmd, ctxOf(i, args)), onUpdate(i));
       }
       case "card":
         return void (await i.reply(privately(await renderCardPanel(uid, arg))));
       case "tower": {
+        await deferNew(i);
         const r = await battle.towerFight(uid);
         const won = r.reward ? `🏰 Floor ${r.floor} cleared! ${coins(r.reward.coins)}${r.reward.shards ? ` + 💠 ${r.reward.shards}` : ""}` : r.winner === "a" ? "Already cleared." : `💥 Floor ${r.floor} held. Level up or rework your deck.`;
         // Straight into the next fight (or a retry); the preview button stays for players who want to scout first.
@@ -328,11 +341,13 @@ async function handleInteraction(i: Interaction) {
       case "battle": {
         if (sub === "go") {
           // Scouted random battle: fight the opponent the player just looked at.
+          await i.deferUpdate();
           const r = await battle.randomFight(uid, Math.random, code);
           return animate({ ...battleReply(r, i.user.displayName, r.opponent.username || "a wild player", r.lvl?.leveledUp ? `🎉 You reached level ${r.lvl.level}!` : undefined), components: nextButtons("battle", uid) }, onUpdate(i));
         }
         if (Date.now() - i.message.createdTimestamp > 5 * 60_000) return void (await i.update({ content: "⌛ This challenge expired.", components: [] }));
         if (sub === "decline") return void (await i.update({ content: `${mention(uid)} declined the battle.`, components: [] }));
+        await i.deferUpdate();
         const r = await battle.fight(code, uid); // code = challenger's id
         const challenger = await client.users.fetch(code);
         return animate({ ...battleReply(r, challenger.displayName, i.user.displayName), components: nextButtons("deck", uid) }, onUpdate(i));
@@ -453,6 +468,7 @@ client.on(Events.InteractionCreate, async (i) => {
   } catch (e) {
     if (!i.isRepliable()) return;
     const payload = { ...errorReply(e, i.user.id), flags: MessageFlags.Ephemeral as const };
+    if (thinking.has(i)) await i.deleteReply().catch(() => {}); // e.g. hunt on cooldown: show only the private error
     await (i.replied || i.deferred ? i.followUp(payload) : i.reply(payload)).catch(() => {});
   }
 });
