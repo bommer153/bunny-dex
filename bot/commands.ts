@@ -15,7 +15,7 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import { fx } from "./fx";
-import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, embed, info, mention, row } from "./ui";
+import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, embed, info, mention, mood, row } from "./ui";
 
 /** `frames` are shown first, one after another, by editing the message (a simple Discord "animation"). */
 /** `frames` play first (message edits). `ms` = how long this frame stays up (default 900ms). */
@@ -211,7 +211,7 @@ type BattleResult = Pick<Fight, "lanes" | "winner"> & Partial<Pick<Fight, "bonus
 /** Battle embed. `shown` < lanes reveals only the first lanes (used for the lane-by-lane animation). */
 export function renderBattle(r: BattleResult, aName: string, bName: string, shown = r.lanes.length) {
   const lanes = r.lanes.map((l, i) => {
-    if (i >= shown) return `**Lane ${i + 1}:** ⚔️ *clashing…*`;
+    if (i >= shown) return `**Lane ${i + 1}:** ${mood("thinking", "⚔️")} *clashing…*`;
     const side = (f: typeof l.a, p: number) => (f ? `${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} (${p})` : "*empty*");
     const mark = l.winner === "a" ? "⬅️" : l.winner === "b" ? "➡️" : "🤝";
     return `**Lane ${i + 1}:** ${side(l.a, l.pa)} ${mark} ${side(l.b, l.pb)}`;
@@ -219,7 +219,7 @@ export function renderBattle(r: BattleResult, aName: string, bName: string, show
   const bonus = [r.bonus?.a.length && `**${aName}:** ${r.bonus.a.join(" · ")}`, r.bonus?.b.length && `**${bName}:** ${r.bonus.b.join(" · ")}`].filter(Boolean).join("\n");
   const head = `⚔️ **${aName}** vs **${bName}**${bonus ? `\n${bonus}` : ""}`;
   if (shown < r.lanes.length) return info(`${head}\n\n${lanes.join("\n")}`);
-  const result = r.winner === "a" ? `🏆 **${aName}** wins!` : r.winner === "b" ? `🏆 **${bName}** wins!` : "🤝 Draw. No rewards.";
+  const result = r.winner === "a" ? `${mood("victory", "🏆")} **${aName}** wins!` : r.winner === "b" ? `${mood("angry", "🏆")} **${bName}** wins!` : `${mood("thinking", "🤝")} Draw. No rewards.`;
   return info(`${head}\n\n${lanes.join("\n")}\n\n${result}\nWinner +${CONFIG.battleWinCoins} coins · loser +${CONFIG.battleLossCoins}. Deck cards gain XP.`);
 }
 
@@ -558,7 +558,7 @@ const commands: Record<string, Handler> = {
       const s = await battle.scout(uid);
       const team = (t: typeof s.a) => t.map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n") || "*no cards*";
       return {
-        embeds: [info(`🔭 **Scouting** · ${s.opponent.username || "a wild player"}\n${team(s.b)}\n\n**Your deck** (lane order)\n${team(s.a)}\n\n*Tip: element advantage gives +25% in a lane. Edit your deck to counter, or find another opponent.*`)],
+        embeds: [info(`${mood("thinking", "🔭")} **Scouting** ·${s.opponent.username || "a wild player"}\n${team(s.b)}\n\n**Your deck** (lane order)\n${team(s.a)}\n\n*Tip: element advantage gives +25% in a lane. Edit your deck to counter, or find another opponent.*`)],
         components: [row(
           btn(cid("battle", `go:${s.opponent.discordId}`, uid), `⚔️ Fight (⚡${CONFIG.energyCost.battle})`, ButtonStyle.Primary),
           btn(cid("menu", "battle random", uid), "🔄 Find another"),

@@ -14,6 +14,16 @@ export function asPlayer<T>(user: User, member: unknown, fn: () => Promise<T>) {
     : { name: user.displayName, iconURL: user.displayAvatarURL() };
   return viewer.run(who, fn);
 }
+/**
+ * Mascot emojis named `bunnydex_<mood>`: app emojis (Developer Portal → Emojis, work in every server) or emojis
+ * from any server the bot is in. Text only: Discord shows custom emojis in descriptions/content, not titles or footers.
+ */
+const moods = new Map<string, string>();
+export function loadMoods(list: Iterable<{ id: string; name: string | null; animated?: boolean | null }>) {
+  for (const e of list) if (e.name?.startsWith("bunnydex_")) moods.set(e.name.slice(9), `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`);
+}
+export const mood = (name: string, fallback: string) => moods.get(name) ?? fallback;
+
 /** A new embed headed with the current player's name and avatar (none for background posts like auction results). */
 export function embed() {
   const e = new EmbedBuilder();

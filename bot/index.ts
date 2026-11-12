@@ -19,7 +19,7 @@ import {
   UNLOCKED, availableCards, errorButtons, hooks, readyQuests, withStatus, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderShop, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
-import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
+import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, loadMoods, mention, mood, row } from "./ui";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
 import { nextMinBid } from "../game/rules";
@@ -273,7 +273,7 @@ async function handleInteraction(i: Interaction) {
       case "gift": {
         const [code, to] = arg.split(":");
         const def = await cards.giftCard(uid, to, code);
-        return void (await i.update({ content: `🎁 ${mention(uid)} gave **${def.name}** to ${mention(to)}!`, embeds: [], components: nextButtons("gift", uid) }));
+        return void (await i.update({ content: `${mood("love", "🎁")} ${mention(uid)} gave **${def.name}** to ${mention(to)}!`, embeds: [], components: nextButtons("gift", uid) }));
       }
       case "reroll": {
         const r = await cards.rerollVariant(uid, arg);
@@ -321,7 +321,7 @@ async function handleInteraction(i: Interaction) {
         const [mix, ...glow] = revealFrames(r.success ? r.card.rarity : r.from, opening);
         const frames: Reply[] = clip ? [clip] : [mix, ...(r.success ? glow : [])];
         if (!r.success) {
-          return animate({ embeds: [info(`💨 **Poof!** The combine failed (${Math.round(r.chance * 100)}% chance).\nYou kept **${r.keptCard.name}** \`${r.kept}\`.\n\n${used}`, 0x52525b)], components: again, frames }, onUpdate(i));
+          return animate({ embeds: [info(`${mood("laugh", "💨")} **Poof!** The combine failed (${Math.round(r.chance * 100)}% chance).\nYou kept **${r.keptCard.name}** \`${r.kept}\`.\n\n${used}`, 0x52525b)], components: again, frames }, onUpdate(i));
         }
         const e = cardEmbed(r.card, { variant: r.variant, title: `🧪✨ Success! You got ${RARITY_EMOJI[r.card.rarity]} ${r.variant !== "normal" ? r.variant + " " : ""}${r.card.name}!`, image: "full" })
           .addFields({ name: "Inputs", value: used.replace("**Fused:** ", "") })
@@ -509,6 +509,9 @@ async function tick() {
 
 client.once(Events.ClientReady, (c) => {
   console.log(`BunnyDex bot ready as ${c.user.tag}`);
+  // App emojis last so they win over same-named server copies (they survive the bot leaving that server).
+  loadMoods(c.emojis.cache.values());
+  void c.application.emojis.fetch().then((list) => loadMoods(list.values())).catch((e) => console.error("app emojis:", e));
   // Effect clips build in the background; until then replies just go out without them.
   void warmFx().then((r) => console.log(`fx: ${r.count} clips ready in ${r.ms}ms`));
   setInterval(tick, 15_000);
