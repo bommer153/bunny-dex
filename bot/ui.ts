@@ -21,7 +21,7 @@ export function embed() {
   return who ? e.setAuthor(who) : e;
 }
 import { getCard, type CardDef, type Rarity } from "../game/data/cards";
-import { RARITY_EMOJI, variantInfo } from "../game/config";
+import { RARITY_EMOJI, TRAITS, variantInfo } from "../game/config";
 import { cardStats } from "../game/rules";
 
 export const RARITY_COLOR: Record<Rarity, number> = {
@@ -36,11 +36,11 @@ export const coins = (n: number) => `🪙 **${n.toLocaleString()}**`;
 export const mention = (id: string) => `<@${id}>`;
 
 /** One-line card summary: `k3x9qa` 🔵 Foil Tide Tuft · Lv 3 */
-export function cardLine(c: { code: string; slug: string; variant: string; level: number; status?: string }) {
+export function cardLine(c: { code: string; slug: string; variant: string; level: number; status?: string; locked?: boolean | null }) {
   const def = getCard(c.slug);
   const v = c.variant !== "normal" ? `${variantInfo(c.variant).name} ` : "";
   const status = c.status && c.status !== "available" ? ` · *${c.status}*` : "";
-  return `\`${c.code}\` ${RARITY_EMOJI[def.rarity]} ${v}**${def.name}** · Lv ${c.level}${status}`;
+  return `\`${c.code}\` ${RARITY_EMOJI[def.rarity]} ${v}**${def.name}** · Lv ${c.level}${status}${c.locked ? " 🔒" : ""}`;
 }
 
 /** Card art is attached from public/cards, so it works without the website being online. */
@@ -63,6 +63,7 @@ export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number
       { name: "Element", value: def.element, inline: true },
       { name: "Level", value: String(level), inline: true },
       { name: "Stats", value: `⚔️ ${s.atk} · 🛡️ ${s.def} · ❤️ ${s.hp}`, inline: true },
+      { name: "Trait", value: `${TRAITS[def.element].name}: ${TRAITS[def.element].desc}`, inline: true },
     );
   if (def.abilities?.length) e.addFields({ name: "Ability", value: def.abilities.map((a) => `**${a.name}**: ${a.description}`).join("\n") });
   if (opts.image === "full") e.setImage(`attachment://${def.slug}.png`);

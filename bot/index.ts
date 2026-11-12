@@ -1,11 +1,12 @@
 import "dotenv/config";
 import {
-  ActionRowBuilder, Client, Events, type ButtonInteraction, type StringSelectMenuInteraction, type UserSelectMenuInteraction, GatewayIntentBits, MessageFlags, ModalBuilder, Partials, StringSelectMenuBuilder,
-  TextInputBuilder, TextInputStyle, type Interaction, type MessageActionRowComponentBuilder, type ModalActionRowComponentBuilder,
+  ActionRowBuilder, ButtonStyle, Client, Events, type ButtonInteraction, type StringSelectMenuInteraction, type UserSelectMenuInteraction, GatewayIntentBits, MessageFlags, ModalBuilder, Partials, StringSelectMenuBuilder,
+  TextInputBuilder, TextInputStyle, type Interaction, type Message, type MessageActionRowComponentBuilder, type ModalActionRowComponentBuilder,
 } from "discord.js";
 import { connectDb } from "../game/db";
-import { COMBINE_COUNT, CONFIG, RARITY_EMOJI } from "../game/config";
+import { COMBINE_COUNT, CONFIG, RARITY_EMOJI, variantInfo } from "../game/config";
 import { getCard } from "../game/data/cards";
+import { makeCode, rollHunt } from "../game/rules";
 import { GameError } from "../game/errors";
 import { UserCard } from "../game/models";
 import * as player from "../game/services/player";
@@ -15,10 +16,10 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import {
-  availableCards, battleReply, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderTrade, runCommand,
+  UNLOCKED, availableCards, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
-import { asPlayer, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
+import { asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
 import { nextMinBid } from "../game/rules";
@@ -49,7 +50,7 @@ client.on(Events.MessageCreate, async (msg) => {
   if (msg.author.bot) return;
   // Bare "bd" opens the button menu.
   const m = msg.content.trim().match(new RegExp(`^${CONFIG.prefix}(?:\\s+(\\S+)\\s*([\\s\\S]*))?$`, "i"));
-  if (!m) return;
+  if (!m) return void maybeSpawn(msg).catch(() => {}); // e.g. no permission to post here
   const [, name = "menu", rest = ""] = m;
   try {
     await asPlayer(msg.author, msg.member, async () => {
@@ -65,6 +66,29 @@ client.on(Events.MessageCreate, async (msg) => {
     await msg.reply({ content: errorText(e), allowedMentions: { repliedUser: false } }).catch(() => {});
   }
 });
+
+// ---- Wild spawns: chatting in a server sometimes makes a bunny appear; the first click catches it. ----
+// shortcut: spawns live in memory, so a restart drops the ones on screen; move them to Mongo if that matters.
+const spawns = new Map<string, { slug: string; variant: string; caught?: string }>();
+const lastSpawn = new Map<string, number>(); // channelId → time
+
+async function maybeSpawn(msg: Message) {
+  if (!msg.inGuild() || !msg.channel.isSendable()) return;
+  const now = Date.now();
+  if (now - (lastSpawn.get(msg.channelId) ?? 0) < CONFIG.spawnCooldownMs || Math.random() >= CONFIG.spawnChance) return;
+  lastSpawn.set(msg.channelId, now);
+  const { card, variant } = rollHunt(Math.random);
+  const id = makeCode();
+  spawns.set(id, { slug: card.slug, variant });
+  const e = cardEmbed(card, { variant, title: `🌾 A wild ${RARITY_EMOJI[card.rarity]} ${variant !== "normal" ? variant + " " : ""}${card.name} appeared!`, image: "full" })
+    .setFooter({ text: `First to click catches it · runs away in ${CONFIG.spawnTtlMs / 60_000} min` });
+  const sent = await msg.channel.send({ embeds: [e], files: [cardFile(card.slug)], components: [row(btn(cid("catch", id, "*"), "🥕 Catch!", ButtonStyle.Success))] });
+  setTimeout(() => {
+    const s = spawns.get(id);
+    spawns.delete(id);
+    if (s && !s.caught) sent.edit({ content: `💨 The wild **${card.name}** ran away…`, components: [] }).catch(() => {});
+  }, CONFIG.spawnTtlMs);
+}
 
 // ================= Buttons, menus, modals =================
 
@@ -108,7 +132,7 @@ const CAULDRON_SHAKE: Record<Rarity, string> = {
   secret: "",
 };
 
-const ctxOf =(i: Interaction, args: string[] = []): Ctx => ({ uid: i.user.id, name: i.user.displayName, channelId: i.channelId ?? "", args });
+const ctxOf = (i: Interaction, args: string[] = []): Ctx => ({ uid: i.user.id, name: i.user.displayName, channelId: i.channelId ?? "", args, guildId: i.guildId });
 const privately = (r: Reply) => ({ ...r, flags: MessageFlags.Ephemeral as const });
 
 function modal(id: string, title: string, fields: [id: string, label: string, required: boolean, placeholder?: string][]) {
@@ -128,6 +152,10 @@ async function cardPanelButton(i: ButtonInteraction, act: string, code: string) 
   switch (act) {
     case "burrow":
       return void (await panel(`🕳️ **${(await cards.burrowAdd(uid, code)).name}** moved into your burrow.`));
+    case "lock":
+    case "unlock":
+      await cards.setLocked(uid, code, act === "lock");
+      return void (await panel(act === "lock" ? "🔒 Locked: it won't be fed, combined, sold or traded." : "🔓 Unlocked."));
     case "unburrow": {
       const r = await cards.burrowRemove(uid, code);
       return void (await panel(`🐇 **${r.card.name}** left the burrow (collected ${coins(r.coins)}).`));
@@ -141,7 +169,7 @@ async function cardPanelButton(i: ButtonInteraction, act: string, code: string) 
       const c = await cards.getOwnedCard(uid, code);
       const u = await ensureUser(uid);
       const rarity = getCard(c.slug).rarity;
-      const pool = (await availableCards(uid)).filter((x) => x.code !== c.code && !u.user.deck.includes(x.code) && (act === "feedsel" || getCard(x.slug).rarity === rarity));
+      const pool = (await availableCards(uid, UNLOCKED)).filter((x) => x.code !== c.code && !u.user.deck.includes(x.code) && (act === "feedsel" || getCard(x.slug).rarity === rarity));
       const need = act === "combine" ? COMBINE_COUNT - 1 : 1;
       if (pool.length < need) {
         return void (await i.reply({ content: act === "combine" ? `You need ${need} more available **${rarity}** cards (not in your deck) to combine.` : "You have no other available cards to feed.", flags: MessageFlags.Ephemeral }));
@@ -173,6 +201,7 @@ async function handleInteraction(i: Interaction) {
     return;
   }
   await ensureUser(uid, i.user.username);
+  await player.seenIn(uid, i.guildId);
 
   if (i.isButton()) {
     const [sub, code] = arg.split(":");
@@ -186,6 +215,35 @@ async function handleInteraction(i: Interaction) {
       }
       case "card":
         return void (await i.reply(privately(await renderCardPanel(uid, arg))));
+      case "tower": {
+        const r = await battle.towerFight(uid);
+        const won = r.reward ? `🏰 Floor ${r.floor} cleared! ${coins(r.reward.coins)}${r.reward.shards ? ` + 💠 ${r.reward.shards}` : ""}` : r.winner === "a" ? "Already cleared." : `💥 Floor ${r.floor} held. Level up or rework your deck.`;
+        const next = [row(btn(cid("menu", "tower", uid), r.reward ? "🏰 Next floor" : "🏰 Try again", ButtonStyle.Primary), btn(cid("menu", "deck", uid), "🛡️ Deck"), btn(cid("menu", "menu", uid), "🏠 Menu"))];
+        return animate({ ...battleReply(r, i.user.displayName, `Floor ${r.floor}`, won), components: next }, onReply(i));
+      }
+      case "shard": {
+        const codes = arg === "dupes" ? (await cards.spareDupes(uid)).map((c) => c.code) : arg.split(",");
+        const r = await cards.shardCards(uid, codes);
+        return void (await i.update({ ...updateWith(txReply(`💠 Broke ${r.count} card${r.count > 1 ? "s" : ""} into **${r.shards}** shards.`)), components: [row(btn(cid("menu", "shard", uid), "💠 Shards", ButtonStyle.Primary), btn(cid("menu", "dex", uid), "📖 Dex"), btn(cid("menu", "menu", uid), "🏠 Menu"))] }));
+      }
+      case "gift": {
+        const [code, to] = arg.split(":");
+        const def = await cards.giftCard(uid, to, code);
+        return void (await i.update({ content: `🎁 ${mention(uid)} gave **${def.name}** to ${mention(to)}!`, embeds: [], components: nextButtons("gift", uid) }));
+      }
+      case "reroll": {
+        const r = await cards.rerollVariant(uid, arg);
+        const better = variantInfo(r.variant).mult > variantInfo(r.from).mult ? "✨ Upgrade!" : r.variant === r.from ? "Same again." : "📉 Rolled down.";
+        return void (await i.update({ ...updateWith(await renderCardPanel(uid, r.code, `🎲 ${variantInfo(r.from).name} → **${variantInfo(r.variant).name}** · ${better}`)) }));
+      }
+      case "catch": {
+        const s = spawns.get(arg);
+        if (!s || s.caught) return void (await i.reply({ content: "Too late, it's gone! 💨", flags: MessageFlags.Ephemeral }));
+        s.caught = uid; // set before any await: Node runs this synchronously, so only the first click gets past the check
+        const uc = await cards.grantCard(uid, s.slug, s.variant);
+        const def = getCard(s.slug);
+        return void (await i.update({ content: `🎉 ${mention(uid)} caught the wild ${RARITY_EMOJI[def.rarity]} **${def.name}**! \`${uc.code}\``, components: [row(btn(cid("card", uc.code, uid), "Open card"), btn(cid("hunt", "1", uid), "🌿 Hunt", ButtonStyle.Primary))], allowedMentions: { parse: [] } }));
+      }
       case "cp":
         return cardPanelButton(i, sub, code);
       case "use": {
@@ -204,38 +262,49 @@ async function handleInteraction(i: Interaction) {
         const [target, list] = arg.split(":");
         const r = await cards.feed(uid, target, list.split(","));
         const skipped = r.skipped.length ? `\nSkipped (not available): ${r.skipped.join(", ")}` : "";
-        return void (await i.update({ content: `🍽️ **${r.card.name}** gained ${r.gained} XP → Lv ${r.level}${r.level > r.from ? " 🎉" : ""}${r.capped ? " (max level)" : ""}${skipped}`, embeds: [], components: [] }));
+        return void (await i.update({ content: `🍽️ **${r.card.name}** gained ${r.gained} XP → Lv ${r.level}${r.level > r.from ? " 🎉" : ""}${r.capped ? " (max level)" : ""}${skipped}`, embeds: [], components: nextButtons("feed", uid) }));
       }
       case "combine": {
         const codes = arg.split(",");
         const inputs = await UserCard.find({ ownerId: uid, code: { $in: codes } }).lean(); // read before they're consumed
         const r = await cards.combine(uid, codes);
         const used = `**Fused:** ${inputs.map((c) => cardLine(c)).join(", ")}`;
+        // Next step right from the result: same-rarity auto pick, or the combine menu.
+        const again = [row(btn(cid("menu", `combine auto ${r.from}`, uid), "🤖 Auto combine again", ButtonStyle.Primary), btn(cid("menu", "combine", uid), "🧪 Combine"))];
         const opening = `🧪 *You drop ${COMBINE_COUNT} bunnies into the cauldron…*\n${CAULDRON_SHAKE[r.from]}`;
         // The outcome is confirmed above; the clip (success flash or fizzle) only plays it back.
         const clip = clipFrame(`combine-${r.from}-${r.success ? "ok" : "fail"}`, opening);
         const [mix, ...glow] = revealFrames(r.success ? r.card.rarity : r.from, opening);
         const frames: Reply[] = clip ? [clip] : [mix, ...(r.success ? glow : [])];
         if (!r.success) {
-          return animate({ embeds: [info(`💨 **Poof!** The combine failed (${Math.round(r.chance * 100)}% chance).\nYou kept **${r.keptCard.name}** \`${r.kept}\`.\n\n${used}`, 0x52525b)], components: [], frames }, onUpdate(i));
+          return animate({ embeds: [info(`💨 **Poof!** The combine failed (${Math.round(r.chance * 100)}% chance).\nYou kept **${r.keptCard.name}** \`${r.kept}\`.\n\n${used}`, 0x52525b)], components: again, frames }, onUpdate(i));
         }
         const e = cardEmbed(r.card, { variant: r.variant, title: `🧪✨ Success! You got ${RARITY_EMOJI[r.card.rarity]} ${r.variant !== "normal" ? r.variant + " " : ""}${r.card.name}!`, image: "full" })
           .addFields({ name: "Inputs", value: used.replace("**Fused:** ", "") })
           .setFooter({ text: `Card code: ${r.code} · ${r.from} → ${r.card.rarity}` });
-        return animate({ embeds: [e], files: [cardFile(r.card.slug)], components: [], frames }, onUpdate(i));
+        return animate({ embeds: [e], files: [cardFile(r.card.slug)], components: again, frames }, onUpdate(i));
       }
       case "sell": {
         const r = await cards.npcSell(uid, arg);
-        return animate({ ...txReply(`💰 Sold **${r.card.name}** for ${coins(r.coins)}.`), components: [] }, onUpdate(i));
+        return animate({ ...txReply(`💰 Sold **${r.card.name}** for ${coins(r.coins)}.`), components: nextButtons("sell", uid) }, onUpdate(i));
       }
       case "cancel":
         return void (await i.update({ content: "Cancelled.", embeds: [], components: [] }));
+      case "lbs": {
+        const [kind, scope] = arg.split(":");
+        return void (await i.update(updateWith(await renderLeaderboard(kind as "coins", uid, scope === "server" ? (i.guildId ?? undefined) : undefined))));
+      }
       case "battle": {
+        if (sub === "go") {
+          // Scouted random battle: fight the opponent the player just looked at.
+          const r = await battle.randomFight(uid, Math.random, code);
+          return animate({ ...battleReply(r, i.user.displayName, r.opponent.username || "a wild player", r.lvl?.leveledUp ? `🎉 You reached level ${r.lvl.level}!` : undefined), components: nextButtons("battle", uid) }, onUpdate(i));
+        }
         if (Date.now() - i.message.createdTimestamp > 5 * 60_000) return void (await i.update({ content: "⌛ This challenge expired.", components: [] }));
         if (sub === "decline") return void (await i.update({ content: `${mention(uid)} declined the battle.`, components: [] }));
         const r = await battle.fight(code, uid); // code = challenger's id
         const challenger = await client.users.fetch(code);
-        return animate({ ...battleReply(r, challenger.displayName, i.user.displayName), components: [] }, onUpdate(i));
+        return animate({ ...battleReply(r, challenger.displayName, i.user.displayName), components: nextButtons("deck", uid) }, onUpdate(i));
       }
       case "trade": {
         if (sub === "accept") return void (await i.update(updateWith(await renderTrade(await trade.acceptTrade(uid, code)))));
@@ -248,7 +317,7 @@ async function handleInteraction(i: Interaction) {
           return void (await i.update(updateWith({ ...(await renderTrade(r.trade!)), content: r.settled ? "✅ Trade complete!" : undefined })));
         }
         if (sub === "add") {
-          const mine = await UserCard.find({ ownerId: uid, status: "available" }).sort({ level: -1 }).limit(25).lean();
+          const mine = await UserCard.find({ ownerId: uid, status: "available", ...UNLOCKED }).sort({ level: -1 }).limit(25).lean();
           if (!mine.length) return void (await i.reply({ content: "You have no available cards.", flags: MessageFlags.Ephemeral }));
           const menu = new StringSelectMenuBuilder()
             .setCustomId(`tradeadd|${code}:${i.message.id}|${uid}`)
@@ -312,7 +381,7 @@ async function handleInteraction(i: Interaction) {
       return void (await i.update(updateWith({ ...(await callCommand("deck", ctxOf(i))), content: "✅ Deck saved." })));
     }
     if (action === "help") return void (await i.update(updateWith(renderHelp(uid, i.values[0] === "overview" ? "" : i.values[0]))));
-    if (action === "lb") return void (await i.update(updateWith(await renderLeaderboard(i.values[0] as "coins", uid))));
+    if (action === "lb") return void (await i.update(updateWith(await renderLeaderboard(i.values[0] as "coins", uid, arg === "server" ? (i.guildId ?? undefined) : undefined))));
     if (action === "tradeadd") {
       const [code, panelId] = arg.split(":");
       let t = await trade.getTrade(code);

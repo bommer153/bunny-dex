@@ -1,8 +1,12 @@
 import { CARDS, RARITIES, ELEMENTS, getCard, type Rarity } from "../data/cards";
-import { CARROT_XP, COMBINE_CHANCE, COMBINE_COUNT, CONFIG } from "../config";
+import { CARROT_XP, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, REROLL_COST, SHARD_YIELD, craftCost } from "../config";
 import { fail } from "../errors";
 import { User, UserCard, type CardStatus } from "../models";
-import { applyCardXp, burrowEarnings, burrowSlots, cardValue, feedXp, makeCode, nextRarity, rollCombine, type Rng } from "../rules";
+import { applyCardXp, burrowEarnings, burrowSlots, cardValue, completedSets, rollVariant, spareCards, feedXp, makeCode, nextRarity, rollCombine, setTitle, type Rng } from "../rules";
+import { bump } from "./quests";
+
+/** Cards that can be used up or given away: not busy elsewhere and not 🔒 locked by the player. */
+const FREE = { status: "available", locked: { $ne: true } } as const;
 
 export async function grantCard(ownerId: string, slug: string, variant: string, level = 1) {
   for (let i = 0; ; i++) {
@@ -27,12 +31,13 @@ export async function getOwnedCard(ownerId: string, code: string) {
  */
 export async function lockCard(ownerId: string, code: string, status: Exclude<CardStatus, "available">, extra: object = {}) {
   const card = await UserCard.findOneAndUpdate(
-    { ownerId, code: code.toLowerCase(), status: "available" },
+    { ownerId, code: code.toLowerCase(), ...(status === "burrow" ? { status: "available" } : FREE) },
     { status, ...extra },
     { returnDocument: "after" },
   );
   if (card) return card;
   const c = await getOwnedCard(ownerId, code);
+  if (c.locked && c.status === "available") fail("CONFLICT", `\`${c.code}\` is 🔒 locked. Unlock it first: \`bd unlock ${c.code}\`.`);
   return fail("CONFLICT", `\`${c.code}\` is busy (${c.status}). Free it first.`);
 }
 
@@ -42,7 +47,7 @@ export async function releaseCard(code: string, from: CardStatus) {
 
 /** Moves a locked card to a new owner. Returns false if it wasn't in the expected state. */
 export async function transferCard(code: string, fromId: string, toId: string, from: CardStatus) {
-  const r = await UserCard.updateOne({ code, ownerId: fromId, status: from }, { ownerId: toId, status: "available" });
+  const r = await UserCard.updateOne({ code, ownerId: fromId, status: from }, { ownerId: toId, status: "available", locked: false });
   if (r.modifiedCount) await User.updateOne({ discordId: fromId }, { $pull: { deck: code } });
   return r.modifiedCount === 1;
 }
@@ -95,11 +100,11 @@ export async function feed(ownerId: string, targetCode: string, fodder: string[]
     }
     for (const code of new Set(fodder.map((c) => c.toLowerCase()))) {
       // Skip (don't throw) so cards already eaten in this loop still pay out their XP.
-      const eaten = await UserCard.findOneAndDelete({ ownerId, code, status: "available" });
+      const eaten = await UserCard.findOneAndDelete({ ownerId, code, ...FREE });
       if (eaten) gained += feedXp(getCard(eaten.slug), eaten.variant, eaten.level);
       else skipped.push(code);
     }
-    if (!gained) fail("CONFLICT", `None of those are available cards you own: ${skipped.map((s) => `\`${s}\``).join(", ")}`);
+    if (!gained) fail("CONFLICT", `None of those are available, unlocked cards you own: ${skipped.map((s) => `\`${s}\``).join(", ")}`);
   } else {
     const per = CARROT_XP[fodder.item] ?? fail("INVALID", "Only carrots and golden carrots can be fed.");
     if (!Number.isInteger(fodder.qty) || fodder.qty < 1) fail("INVALID", "Quantity must be a positive whole number.");
@@ -113,7 +118,10 @@ export async function feed(ownerId: string, targetCode: string, fodder: string[]
     const cur = attempt === 0 ? target : await getOwnedCard(ownerId, target.code);
     const next = applyCardXp(cur, def.rarity, gained);
     const r = await UserCard.updateOne({ _id: cur._id, level: cur.level, xp: cur.xp }, { level: next.level, xp: next.xp });
-    if (r.modifiedCount) return { card: def, code: cur.code, from: cur.level, ...next, gained, skipped };
+    if (r.modifiedCount) {
+      await bump(ownerId, "feed");
+      return { card: def, code: cur.code, from: cur.level, ...next, gained, skipped };
+    }
   }
   return fail("CONFLICT", "That card is busy, try again.");
 }
@@ -131,8 +139,8 @@ export async function giveCardXp(ownerId: string, codes: string[], amount: numbe
 export async function npcSell(ownerId: string, code: string) {
   const user = await User.findOne({ discordId: ownerId }, { deck: 1 });
   if (user?.deck.includes(code.toLowerCase())) fail("INVALID", "That card is in your battle deck. Remove it first.");
-  const card = await UserCard.findOneAndDelete({ ownerId, code: code.toLowerCase(), status: "available" });
-  if (!card) return fail("CONFLICT", `\`${code}\` isn't an available card you own.`);
+  const card = await UserCard.findOneAndDelete({ ownerId, code: code.toLowerCase(), ...FREE });
+  if (!card) return fail("CONFLICT", `\`${code}\` isn't an available, unlocked card you own.`);
   const coins = Math.max(1, Math.floor(cardValue(getCard(card.slug), card.variant, card.level) * CONFIG.npcSellRate));
   await User.updateOne({ discordId: ownerId }, { $inc: { coins } });
   return { card: getCard(card.slug), coins };
@@ -148,9 +156,9 @@ export async function combine(ownerId: string, codes: string[], rng: Rng = Math.
   const user = await User.findOne({ discordId: ownerId }, { deck: 1 });
   const inDeck = unique.find((c) => user?.deck.includes(c));
   if (inDeck) fail("INVALID", `\`${inDeck}\` is in your battle deck. Remove it first.`);
-  const found = await UserCard.find({ ownerId, code: { $in: unique }, status: "available" });
+  const found = await UserCard.find({ ownerId, code: { $in: unique }, ...FREE });
   const missing = unique.filter((c) => !found.some((f) => f.code === c));
-  if (missing.length) fail("CONFLICT", `Not available cards you own: ${missing.map((m) => `\`${m}\``).join(", ")}`);
+  if (missing.length) fail("CONFLICT", `Not available, unlocked cards you own: ${missing.map((m) => `\`${m}\``).join(", ")}`);
   const rarity = getCard(found[0].slug).rarity;
   if (found.some((c) => getCard(c.slug).rarity !== rarity)) fail("INVALID", "All cards must be the same rarity.");
   if (!nextRarity(rarity)) fail("INVALID", "Secret cards are already the top rarity.");
@@ -158,7 +166,7 @@ export async function combine(ownerId: string, codes: string[], rng: Rng = Math.
   // All or nothing: if a card was sold/traded meanwhile, put back the ones already taken.
   const taken: typeof found = [];
   for (const c of found) {
-    const d = await UserCard.findOneAndDelete({ _id: c._id, status: "available" });
+    const d = await UserCard.findOneAndDelete({ _id: c._id, ...FREE });
     if (!d) {
       if (taken.length) await UserCard.insertMany(taken.map((t) => t.toObject()));
       return fail("CONFLICT", "One of those cards just changed. Try again.");
@@ -169,6 +177,7 @@ export async function combine(ownerId: string, codes: string[], rng: Rng = Math.
   const best = taken.reduce((a, b) => (value(b) > value(a) ? b : a));
   const chance = COMBINE_CHANCE[rarity];
   const roll = rollCombine(rarity, rng);
+  await bump(ownerId, "combine");
   if (roll.success) {
     const uc = await grantCard(ownerId, roll.card.slug, best.variant);
     return { success: true as const, from: rarity, chance, card: roll.card, code: uc.code, variant: best.variant };
@@ -206,6 +215,7 @@ export async function burrowCollect(ownerId: string, onlyCode?: string, now = ne
     if (r.modifiedCount) coins += earned;
   }
   await User.updateOne({ discordId: ownerId }, { $inc: { coins } });
+  if (coins > 0) await bump(ownerId, "burrow");
   return coins;
 }
 
@@ -240,4 +250,86 @@ export async function getTeam(ownerId: string) {
     cards = all.sort((a, b) => power(b) - power(a)).slice(0, CONFIG.teamSize);
   }
   return cards.map((c) => ({ def: getCard(c.slug), level: c.level, code: c.code, variant: c.variant }));
+}
+
+// ---- Lock & element sets ----
+
+/** 🔒 A locked card is never fed, combined, sold, listed, auctioned or traded until unlocked. */
+export async function setLocked(ownerId: string, code: string, locked: boolean) {
+  const c = await UserCard.findOneAndUpdate({ ownerId, code: code.toLowerCase() }, { locked }, { returnDocument: "after" });
+  return c ?? fail("NOT_FOUND", `You don't own a card with code \`${code}\`.`);
+}
+
+/** Pays a one-time reward + title for every element the player now owns completely. Returns new titles. */
+export async function claimSets(ownerId: string) {
+  const owned = new Set<string>(await UserCard.distinct("slug", { ownerId }));
+  const earned: string[] = [];
+  for (const el of completedSets(owned)) {
+    const title = setTitle(el);
+    const r = await User.updateOne({ discordId: ownerId, titles: { $ne: title } }, { $push: { titles: title }, $inc: { coins: CONFIG.setRewardCoins } });
+    if (r.modifiedCount) earned.push(title);
+  }
+  return earned;
+}
+
+// ---- Shards, crafting, gifts, re-rolls ----
+
+/** Cards that `shard dupes` would break: spare duplicates (your best copy of each bunny stays), not locked, not in the deck. */
+export async function spareDupes(ownerId: string) {
+  const user = await User.findOne({ discordId: ownerId }, { deck: 1 });
+  const mine = await UserCard.find({ ownerId, ...FREE, code: { $nin: user?.deck ?? [] } }).lean();
+  return spareCards(mine);
+}
+
+/** Breaks cards into shards. Cards that changed meanwhile are skipped, never double-counted. */
+export async function shardCards(ownerId: string, codes: string[]) {
+  const user = await User.findOne({ discordId: ownerId }, { deck: 1 });
+  let shards = 0;
+  let count = 0;
+  for (const code of new Set(codes.map((c) => c.toLowerCase()))) {
+    if (user?.deck.includes(code)) continue;
+    const d = await UserCard.findOneAndDelete({ ownerId, code, ...FREE });
+    if (!d) continue;
+    shards += SHARD_YIELD[getCard(d.slug).rarity];
+    count++;
+  }
+  if (!count) fail("CONFLICT", "None of those are available, unlocked cards you own (deck cards are skipped).");
+  await User.updateOne({ discordId: ownerId }, { $inc: { shards } });
+  return { shards, count };
+}
+
+/** Spends shards on one specific card: the fix for "I'll never get the last one". */
+export async function craftCard(ownerId: string, slug: string) {
+  const def = getCard(slug);
+  const cost = craftCost(def.rarity) ?? fail("INVALID", "Secret cards can't be crafted.");
+  const r = await User.updateOne({ discordId: ownerId, shards: { $gte: cost } }, { $inc: { shards: -cost } });
+  if (!r.modifiedCount) fail("INSUFFICIENT_FUNDS", `Crafting ${def.name} costs 💠 ${cost} shards.`);
+  const uc = await grantCard(ownerId, slug, "normal");
+  return { card: def, code: uc.code, cost };
+}
+
+/** Gives a card to another player, no strings attached. */
+export async function giftCard(fromId: string, toId: string, code: string) {
+  if (fromId === toId) fail("INVALID", "You can't gift yourself.");
+  if (!(await User.exists({ discordId: toId }))) fail("NOT_FOUND", "That player hasn't started yet.");
+  const user = await User.findOne({ discordId: fromId }, { deck: 1 });
+  if (user?.deck.includes(code.toLowerCase())) fail("INVALID", "That card is in your battle deck. Remove it first.");
+  const c = await UserCard.findOneAndUpdate({ ownerId: fromId, code: code.toLowerCase(), ...FREE }, { ownerId: toId, locked: false }, { returnDocument: "after" });
+  return c ? getCard(c.slug) : fail("CONFLICT", `\`${code}\` isn't an available, unlocked card you own.`);
+}
+
+/** Pays coins to roll a new variant. It can roll down too: that's the gamble. */
+export async function rerollVariant(ownerId: string, code: string, rng: Rng = Math.random) {
+  const card = await getOwnedCard(ownerId, code);
+  if (card.locked || card.status !== "available") fail("CONFLICT", `\`${card.code}\` must be available and unlocked to re-roll.`);
+  const cost = REROLL_COST[getCard(card.slug).rarity];
+  const r = await User.updateOne({ discordId: ownerId, coins: { $gte: cost } }, { $inc: { coins: -cost } });
+  if (!r.modifiedCount) fail("INSUFFICIENT_FUNDS", `Re-rolling costs ${cost.toLocaleString()} coins.`);
+  const variant = rollVariant(rng);
+  const u = await UserCard.updateOne({ _id: card._id, ...FREE }, { variant });
+  if (!u.modifiedCount) {
+    await User.updateOne({ discordId: ownerId }, { $inc: { coins: cost } }); // card changed meanwhile: refund
+    fail("CONFLICT", "That card just changed. Try again.");
+  }
+  return { card: getCard(card.slug), code: card.code, from: card.variant, variant, cost };
 }

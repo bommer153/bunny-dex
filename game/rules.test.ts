@@ -5,6 +5,7 @@ import { COMBINE_CHANCE, CONFIG, LEVEL_CAP } from "./config";
 import {
   antiSnipe, applyCardXp, burrowEarnings, cardStats, energyNow, energyWaitMs, isRarePlus, makeCode, maxEnergy, msUntilShopReset, nextMinBid, parseDuration, shopDay,
   autoPick, nextRarity, playerLevel, resolveBattle, spareCards, rollCombine, rollHunt, rollRarity, xpToNextPlayerLevel,
+  completedSets, dailyQuests, nextStreak, setTitle, streakCoins, streakDay, weekKey, huntXp, lanePower, teamBonus, towerReward, towerTeam,
 } from "./rules";
 
 /** Deterministic RNG (mulberry32). */
@@ -169,4 +170,57 @@ test("every card has art in public/cards", async () => {
   const missing = CARDS.filter((c) => !existsSync(`public/cards/${c.slug}.png`)).map((c) => c.slug);
   assert.deepEqual(missing, [], "run: npx tsx scripts/placeholder-art.ts");
   assert.equal(new Set(CARDS.map((c) => c.slug)).size, CARDS.length, "duplicate slug");
+});
+
+test("daily streak grows within the grace window, resets after, and cycles every 7 days", () => {
+  const now = new Date("2026-05-10T12:00:00Z");
+  const h = 3_600_000;
+  assert.equal(nextStreak(undefined, 0, now), 1);
+  assert.equal(nextStreak(new Date(now.getTime() - 23 * h), 4, now), 5);
+  assert.equal(nextStreak(new Date(now.getTime() - 49 * h), 4, now), 1);
+  assert.deepEqual([1, 6, 7, 8, 14, 15].map(streakDay), [1, 6, 7, 1, 7, 1]);
+  assert.equal(streakCoins(1), CONFIG.dailyCoins);
+  assert.ok(streakCoins(7) > streakCoins(6));
+});
+
+test("daily quests: 3 distinct, stable within a day, and the week starts Monday", () => {
+  const q = dailyQuests("u1", "2026-05-10");
+  assert.equal(new Set(q.map((x) => x.id)).size, 3);
+  assert.deepEqual(dailyQuests("u1", "2026-05-10"), q);
+  assert.equal(weekKey("2026-05-10"), "2026-05-04"); // Sunday → previous Monday
+  assert.equal(weekKey("2026-05-11"), "2026-05-11"); // Monday → itself
+});
+
+test("element sets complete only with every card of that element", () => {
+  const fire = CARDS.filter((c) => c.element === "fire").map((c) => c.slug);
+  assert.deepEqual(completedSets(new Set(fire)), ["fire"]);
+  assert.deepEqual(completedSets(new Set(fire.slice(1))), []);
+  assert.equal(setTitle("fire"), "Fire Keeper");
+});
+
+test("battle traits, team bonus and variants change lane power", () => {
+  const byEl = (el: string) => CARDS.find((c) => c.element === el && c.rarity === "common")!;
+  const f = (el: string, variant = "normal") => ({ def: byEl(el), level: 1, code: el, variant });
+  const elec = f("electric");
+  assert.ok(lanePower(elec, undefined, 0) > lanePower(elec, undefined, 1)); // Surge: lane 1 only
+  assert.ok(lanePower(f("fire", "royal"), undefined) > lanePower(f("fire"), undefined)); // variant bonus
+  const water = f("water");
+  assert.ok(lanePower(water, f("ice")) < lanePower(water, f("fire"))); // Chill cuts attack (fire isn't ice)
+
+  const fire2 = teamBonus([f("fire"), f("fire"), f("water")]);
+  assert.deepEqual(fire2.mult.map((m) => +m.toFixed(2)), [1.05, 1.05, 1]);
+  const light = teamBonus([f("light"), f("water"), f("nature")]);
+  assert.deepEqual(light.mult.map((m) => +m.toFixed(2)), [1, 1.04, 1.04]); // blesses the others, not itself
+});
+
+test("hunt XP halves after the daily cap; tower floors get harder", () => {
+  const cap = CONFIG.huntXpDailyCap;
+  assert.equal(huntXp(0, 10), 10 * CONFIG.huntXp);
+  assert.equal(huntXp(cap, 10), Math.floor((10 * CONFIG.huntXp) / 2));
+  assert.equal(huntXp(cap - 5, 10), 5 * CONFIG.huntXp + Math.floor((5 * CONFIG.huntXp) / 2));
+  assert.equal(towerTeam(1)[0].def.rarity, "common");
+  assert.equal(towerTeam(30)[0].def.rarity, "mythic");
+  assert.equal(towerTeam(3).length, CONFIG.teamSize);
+  assert.equal(towerReward(5).shards, 10);
+  assert.equal(towerReward(4).shards, 0);
 });

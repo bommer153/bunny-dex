@@ -1,9 +1,10 @@
-import { CARDS } from "../data/cards";
+import { CARDS, getCard } from "../data/cards";
 import { CONFIG, ITEMS, itemInfo } from "../config";
 import { fail } from "../errors";
 import { User, UserCard } from "../models";
-import { energyNow, energyWaitMs, isRarePlus, maxEnergy, msUntilShopReset, playerLevel, rollHunt, formatDuration, shopDay, type Rng } from "../rules";
-import { grantCard } from "./cards";
+import { energyNow, energyWaitMs, huntXp, isRarePlus, maxEnergy, msUntilShopReset, nextStreak, playerLevel, rollHunt, formatDuration, shopDay, streakCoins, streakDay, type Rng } from "../rules";
+import { claimSets, grantCard } from "./cards";
+import { bump } from "./quests";
 
 const STARTERS = CARDS.filter((c) => c.flags?.isStarter).map((c) => c.slug);
 
@@ -115,16 +116,27 @@ export async function claimCooldown(discordId: string, field: "lastDaily", ms: n
   return fail("COOLDOWN", `Slow down! Try again in **${formatDuration(left)}**.`);
 }
 
-export async function daily(discordId: string) {
-  await claimCooldown(discordId, "lastDaily", CONFIG.dailyCooldownMs);
-  await addCoins(discordId, CONFIG.dailyCoins);
+export async function daily(discordId: string, rng: Rng = Math.random) {
+  const before = await getUser(discordId);
+  const claimed = await claimCooldown(discordId, "lastDaily", CONFIG.dailyCooldownMs); // atomic: only one claim wins
+  const streak = nextStreak(before.lastDaily, before.streak ?? 0, claimed.lastDaily!);
+  await User.updateOne({ discordId }, { streak });
+  const coins = streakCoins(streak);
+  await addCoins(discordId, coins);
   await giveItem(discordId, "carrot", 2);
   const e = await updateEnergy(discordId, (e, max) => Math.max(e.energy, max)); // refill, never reduce juice overflow
-  return { coins: CONFIG.dailyCoins, carrots: 2, energy: e.energy, max: e.max };
+  const day = streakDay(streak);
+  let bonus = null;
+  if (day === 7) {
+    const { card, variant } = rollHunt(rng, { pity: true }); // day 7: guaranteed rare+
+    bonus = { card, variant, code: (await grantCard(discordId, card.slug, variant)).code };
+  }
+  return { coins, carrots: 2, energy: e.energy, max: e.max, streak, day, bonus };
 }
 
 export async function work(discordId: string, rng: Rng = Math.random) {
   const e = await spendEnergy(discordId, CONFIG.energyCost.work);
+  await bump(discordId, "work");
   const coins = CONFIG.workMin + Math.floor(rng() * (CONFIG.workMax - CONFIG.workMin + 1));
   await addCoins(discordId, coins);
   const xp = await addXp(discordId, 5);
@@ -136,6 +148,7 @@ async function rollOne(discordId: string, state: { cloverHunts: number; huntsSin
   const clover = state.cloverHunts > 0;
   const pity = state.huntsSinceRare + 1 >= CONFIG.pityHunts;
   const { card, variant } = rollHunt(rng, { clover, pity });
+  const isNew = !(await UserCard.exists({ ownerId: discordId, slug: card.slug }));
   const uc = await grantCard(discordId, card.slug, variant);
   const rare = isRarePlus(card.rarity);
   const inc: Record<string, number> = clover ? { cloverHunts: -1 } : {};
@@ -143,7 +156,7 @@ async function rollOne(discordId: string, state: { cloverHunts: number; huntsSin
   await User.updateOne({ discordId }, { ...(rare && { $set: { huntsSinceRare: 0 } }), ...(Object.keys(inc).length && { $inc: inc }) });
   if (clover) state.cloverHunts--;
   state.huntsSinceRare = rare ? 0 : state.huntsSinceRare + 1;
-  return { card, variant, code: uc.code, clover, pity };
+  return { card, variant, code: uc.code, clover, pity, isNew };
 }
 
 export const HUNT_BATCHES = [1, 5, 10] as const;
@@ -158,8 +171,14 @@ export async function huntMany(discordId: string, count: number, rng: Rng = Math
   const state = { cloverHunts: user.cloverHunts, huntsSinceRare: user.huntsSinceRare };
   const cards = [];
   for (let i = 0; i < count; i++) cards.push(await rollOne(discordId, state, rng));
-  const xp = await addXp(discordId, CONFIG.huntXp * count);
-  return { cards, energy, maxEnergy: max, ...xp };
+  const doneToday = user.questDay === shopDay(new Date()) ? (user.dayCounts?.get("hunt") ?? 0) : 0;
+  const xpGained = huntXp(doneToday, count);
+  const xp = await addXp(discordId, xpGained);
+  await bump(discordId, "hunt", count);
+  const titles = cards.some((c) => c.isNew) ? await claimSets(discordId) : [];
+  const dex = (await UserCard.distinct("slug", { ownerId: discordId })).length;
+  // The roll after (pityHunts - 1) misses is forced rare+.
+  return { cards, energy, maxEnergy: max, ...xp, xpGained, titles, dex, pityIn: CONFIG.pityHunts - state.huntsSinceRare };
 }
 
 export async function hunt(discordId: string, rng: Rng = Math.random) {
@@ -237,9 +256,28 @@ export async function profile(discordId: string) {
   return { user, lvl: playerLevel(user.xp), cards, collected: distinct.length, total: CARDS.length };
 }
 
-export async function leaderboard(kind: "coins" | "level" | "collection", limit = 10) {
+/** Remembers which servers a player plays in, for server leaderboards. */
+export async function seenIn(discordId: string, guildId: string | null | undefined) {
+  if (guildId) await User.updateOne({ discordId, guilds: { $ne: guildId } }, { $push: { guilds: guildId } });
+}
+
+/** Adds or removes a card on the player's wishlist. Returns whether it's now on the list. */
+export async function toggleWish(discordId: string, slug: string) {
+  const removed = await User.updateOne({ discordId, wishlist: slug }, { $pull: { wishlist: slug } });
+  if (removed.modifiedCount) return false;
+  const r = await User.updateOne({ discordId, [`wishlist.${CONFIG.wishlistMax - 1}`]: { $exists: false } }, { $addToSet: { wishlist: slug } });
+  if (!r.modifiedCount) fail("INVALID", `Your wishlist is full (${CONFIG.wishlistMax}). Remove one first.`);
+  return true;
+}
+export const wishNames = (slugs: string[]) => slugs.map((s) => getCard(s).name);
+
+/** Top players; `guildId` limits it to players seen in that server. */
+export async function leaderboard(kind: "coins" | "level" | "collection", limit = 10, guildId?: string) {
+  const inGuild = guildId ? { guilds: guildId } : {};
   if (kind === "collection") {
+    const members = guildId ? (await User.find(inGuild, { discordId: 1 })).map((u) => u.discordId) : null;
     const rows = await UserCard.aggregate<{ _id: string; n: number }>([
+      ...(members ? [{ $match: { ownerId: { $in: members } } }] : []),
       { $group: { _id: { o: "$ownerId", s: "$slug" } } },
       { $group: { _id: "$_id.o", n: { $sum: 1 } } },
       { $sort: { n: -1 } },
@@ -250,6 +288,6 @@ export async function leaderboard(kind: "coins" | "level" | "collection", limit 
     return rows.map((r) => ({ discordId: r._id, username: name.get(r._id) ?? "?", value: r.n }));
   }
   const sort = kind === "coins" ? "-coins" : "-xp";
-  const users = await User.find({}, { discordId: 1, username: 1, coins: 1, level: 1 }).sort(sort).limit(limit);
+  const users = await User.find(inGuild, { discordId: 1, username: 1, coins: 1, level: 1 }).sort(sort).limit(limit);
   return users.map((u) => ({ discordId: u.discordId, username: u.username, value: kind === "coins" ? u.coins : u.level }));
 }

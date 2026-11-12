@@ -1,5 +1,9 @@
 // Command guide shared by `bd help` (bot) and /guide (web), so both stay in sync.
-import { COMBINE_CHANCE, COMBINE_COUNT, CONFIG } from "./config";
+import { COMBINE_CHANCE, COMBINE_COUNT, CONFIG, RARITY_WEIGHT, SHARD_YIELD, TRAITS } from "./config";
+
+const total = Object.values(RARITY_WEIGHT).reduce((a, b) => a + b, 0);
+/** Published hunt odds, e.g. "common 67.9% · uncommon 25% · …" (players trust games that show their rates). */
+export const DROP_RATES = Object.entries(RARITY_WEIGHT).map(([r, w]) => `${r} ${+((w / total) * 100).toFixed(2)}%`).join(" · ");
 
 export type GuideCommand = { usage: string; desc: string; aliases?: string[] };
 export type GuideSection = { key: string; emoji: string; title: string; intro: string; web?: string; commands: GuideCommand[] };
@@ -20,11 +24,13 @@ export const GUIDE: GuideSection[] = [
   },
   {
     key: "grind", emoji: "⚡", title: "Energy & grinding", web: "/profile",
-    intro: `Energy refills +1 every minute. Hunt costs ${c.hunt}, work ${c.work}, random battle ${c.battle}. \`daily\` refills it and 🧃 Carrot Juice adds more.`,
+    intro: `Chatting in a server sometimes makes a wild bunny appear: first to press Catch gets it. Energy refills +1 every minute. Hunt costs ${c.hunt}, work ${c.work}, random battle ${c.battle}. \`daily\` refills it and 🧃 Carrot Juice adds more.`,
     commands: [
-      { usage: "hunt [5|10]", desc: `Find a wild bunny (⚡${c.hunt} each). Add 5 or 10 to hunt that many at once. Guaranteed rare+ after ${CONFIG.pityHunts} hunts without one.`, aliases: ["h"] },
+      { usage: "hunt [5|10]", desc: `Find a wild bunny (⚡${c.hunt} each). Add 5 or 10 to hunt that many at once. Guaranteed rare+ after ${CONFIG.pityHunts} hunts without one. Odds: ${DROP_RATES}. Hunts after the first ${CONFIG.huntXpDailyCap} of the day give half XP.`, aliases: ["h"] },
       { usage: "work", desc: `Earn ${CONFIG.workMin}–${CONFIG.workMax} coins (⚡${c.work}).` },
-      { usage: "daily", desc: `${CONFIG.dailyCoins} coins, 2 carrots and a full energy bar, once a day.` },
+      { usage: "daily", desc: `${CONFIG.dailyCoins}+ coins, 2 carrots and a full energy bar, once a day. Keep a streak: coins grow each day and day 7 gives a guaranteed rare+ bunny. Skip 2 days and it resets.` },
+      { usage: "quests", desc: "3 daily quests and 1 weekly quest. Finish them, then press Claim for coins and items. New players also get a *First steps* checklist.", aliases: ["q", "quest"] },
+      { usage: "news", desc: "What's new in the latest update.", aliases: ["patch"] },
     ],
   },
   {
@@ -32,7 +38,14 @@ export const GUIDE: GuideSection[] = [
     intro: "Every card has a 6-letter code (shown in your collection). Level cards by feeding them duplicates or carrots.",
     commands: [
       { usage: "col [rarity] [page]", desc: "Your collection, with rarity filter and pages.", aliases: ["c", "collection"] },
-      { usage: "dex", desc: "Dex progress by rarity and which bunnies you're missing." },
+      { usage: "dex", desc: `Dex progress, missing bunnies and element sets. Owning every card of an element earns a title + ${CONFIG.setRewardCoins} coins.` },
+      { usage: "lock <code>", desc: "🔒 Protect a card: it's never fed, combined, sold, listed or traded (auto combine skips it too)." },
+      { usage: "unlock <code>", desc: "Remove the lock." },
+      { usage: "shard [codes…]", desc: `Break cards into 💠 shards (${Object.entries(SHARD_YIELD).map(([r, n]) => `${r} ${n}`).join(", ")}). No codes offers to break all spare duplicates; your best copy of each bunny is kept.`, aliases: ["shards"] },
+      { usage: "craft <card name>", desc: "Spend shards on the exact bunny you want (10× its shard value). Secret cards can't be crafted." },
+      { usage: "reroll <code>", desc: "Pay coins to roll a new variant. It can roll down too!" },
+      { usage: "wish [card name]", desc: `Toggle a card on your ⭐ wishlist (max ${CONFIG.wishlistMax}). It shows on your profile.`, aliases: ["wishlist"] },
+      { usage: "gift @user <code>", desc: "Give a card to a friend (asks first)." },
       { usage: "card <name|code>", desc: "Card details and art." },
       { usage: "feed <code> <fodder codes…>", desc: "Feed up to 10 cards to one card for XP. The fodder is destroyed (asks first)." },
       { usage: "feed <code> carrot [qty]", desc: "Feed 🥕 carrots (or `golden-carrot`) for XP." },
@@ -63,11 +76,12 @@ export const GUIDE: GuideSection[] = [
   },
   {
     key: "battle", emoji: "⚔️", title: "Battles",
-    intro: `Teams of ${CONFIG.teamSize}, one card per lane. Element advantage matters. Winner gets ${CONFIG.battleWinCoins} coins, loser ${CONFIG.battleLossCoins}, and deck cards gain XP.`,
+    intro: `Teams of ${CONFIG.teamSize}, one card per lane. Element advantage gives +25%. Traits: ${Object.values(TRAITS).map((t) => `${t.name} ${t.desc}`).join("; ")}. Team bonus: 2 of an element +5%, 3 +12%, 3 from one set +8%. Variants add up to +16%. Winner gets ${CONFIG.battleWinCoins} coins, loser ${CONFIG.battleLossCoins}, and deck cards gain XP.`,
     commands: [
       { usage: "deck [codes…]", desc: `Show or set your ${CONFIG.teamSize}-card deck in lane order.` },
       { usage: "battle @user", desc: "Challenge a player. They press Accept.", aliases: ["b"] },
-      { usage: "battle random", desc: `Fight a random player's deck (⚡${c.battle}).` },
+      { usage: "battle random", desc: `Scout a random player's deck first, then fight (⚡${c.battle}), find another, or edit your deck.` },
+      { usage: "tower", desc: `🏰 Meadow Tower: ${CONFIG.towerMaxFloor} PvE floors that get harder. Coins every floor, shards every 5th (⚡${c.battle}).`, aliases: ["tw"] },
     ],
   },
   {
@@ -108,7 +122,7 @@ export const GUIDE: GuideSection[] = [
   {
     key: "lb", emoji: "🏆", title: "Leaderboards", web: "/leaderboard",
     intro: "See who's on top.",
-    commands: [{ usage: "lb [coins|level|collection]", desc: "Top 10 players.", aliases: ["top", "leaderboard"] }],
+    commands: [{ usage: "lb [coins|level|collection] [server]", desc: "Top 10 players, worldwide or just in this server.", aliases: ["top", "leaderboard"] }],
   },
 ];
 

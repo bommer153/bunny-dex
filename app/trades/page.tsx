@@ -19,7 +19,7 @@ export default async function TradesPage({ searchParams }: PageProps<"/trades">)
   const [names, offered, mine] = await Promise.all([
     usernames([t.fromId, t.toId]),
     UserCard.find({ code: { $in: [...t.from!.cards, ...t.to!.cards] } }).lean(),
-    UserCard.find({ ownerId: uid, status: "available" }).sort({ level: -1 }).limit(100).lean(),
+    UserCard.find({ ownerId: uid, status: "available", locked: { $ne: true } }).sort({ level: -1 }).limit(100).lean(),
   ]);
   const meSide = t.fromId === uid ? "from" : "to";
   const sides = [

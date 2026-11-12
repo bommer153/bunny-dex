@@ -6,7 +6,9 @@ import { connectDb } from "./db";
 import { CONFIG } from "./config";
 import { User, UserCard, Auction } from "./models";
 import { buyItem, daily, ensureUser, getEnergy, hunt, huntMany, shopLimitsLeft, spendCoins, consumeItem } from "./services/player";
-import { burrowAdd, burrowCollect, combine, feed, grantCard, lockCard } from "./services/cards";
+import { burrowAdd, burrowCollect, combine, craftCard, feed, giftCard, grantCard, lockCard, npcSell, rerollVariant, setLocked, shardCards, spareDupes } from "./services/cards";
+import { towerFight } from "./services/battle";
+import { bump, claimQuests } from "./services/quests";
 import { CARDS } from "./data/cards";
 import { buyListing, listForSale, placeBid, settleDueAuctions, startAuction } from "./services/market";
 import { acceptTrade, addTradeCard, confirmTrade, createTrade, setTradeCoins } from "./services/trade";
@@ -241,4 +243,82 @@ test("multi-hunt: ×5 spends 5 energy for 5 cards; ×10 without enough energy ch
   await User.updateOne({ discordId: "h1" }, { energy: 50, energyAt: new Date(), huntsSinceRare: CONFIG.pityHunts - 1 });
   const p = await huntMany("h1", 5, () => 0.999); // worst luck otherwise
   assert.ok(p.cards[0].pity && ["rare", "epic", "legendary", "mythic", "secret"].includes(p.cards[0].card.rarity));
+});
+
+test("locked cards can't be fed, combined, sold or listed, but can still be burrowed", async () => {
+  await ensureUser("lk", "locky");
+  const slug = CARDS.find((c) => c.rarity === "common")!.slug;
+  const [a, b, c] = await Promise.all([1, 2, 3].map(() => grantCard("lk", slug, "normal")));
+  await setLocked("lk", a.code, true);
+  await assert.rejects(combine("lk", [a.code, b.code, c.code]), /unlocked/);
+  await assert.rejects(feed("lk", b.code, [a.code]), /unlocked/);
+  await assert.rejects(npcSell("lk", a.code), /unlocked/);
+  await assert.rejects(listForSale("lk", a.code, 100), /locked/);
+  assert.ok(await UserCard.exists({ code: a.code })); // nothing touched it
+  await burrowAdd("lk", a.code);
+  await setLocked("lk", c.code, false);
+});
+
+test("daily streak pays more on day 2 and quests count progress then pay once", async () => {
+  await ensureUser("qs", "questy");
+  const d1 = await daily("qs");
+  assert.equal(d1.streak, 1);
+  await User.updateOne({ discordId: "qs" }, { lastDaily: new Date(Date.now() - 23 * 3_600_000) });
+  const d2 = await daily("qs");
+  assert.equal(d2.streak, 2);
+  assert.ok(d2.coins > d1.coins);
+
+  await bump("qs", "hunt", 100); // finishes the weekly (and the daily hunt quest if rolled)
+  const before = await coinsOf("qs");
+  const { got } = await claimQuests("qs");
+  assert.ok(got.some((q) => q.scope === "week"));
+  assert.ok((await coinsOf("qs")) > before);
+  await assert.rejects(claimQuests("qs"), /No finished quests/); // second claim pays nothing
+});
+
+test("shards: break dupes keeps your best copy, craft spends shards, double-spend is blocked", async () => {
+  await ensureUser("sh", "shardy");
+  await UserCard.deleteMany({ ownerId: "sh" });
+  const slug = CARDS.find((c) => c.rarity === "common")!.slug;
+  const best = await grantCard("sh", slug, "normal", 5);
+  for (let i = 0; i < 4; i++) await grantCard("sh", slug, "normal");
+  const dupes = await spareDupes("sh");
+  assert.equal(dupes.length, 4);
+  assert.ok(!dupes.some((d) => d.code === best.code));
+  const r = await shardCards("sh", dupes.map((d) => d.code));
+  assert.equal(r.shards, 4);
+  await User.updateOne({ discordId: "sh" }, { $inc: { shards: 6 } }); // 10 = one common craft
+  await craftCard("sh", slug);
+  await assert.rejects(craftCard("sh", slug), /shards/);
+  assert.equal((await User.findOne({ discordId: "sh" }))!.shards, 0);
+});
+
+test("gift moves an unlocked card; reroll charges and can refund-free fail on locked", async () => {
+  await ensureUser("g1", "giver");
+  await ensureUser("g2", "taker");
+  const c = await grantCard("g1", CARDS[0].slug, "normal");
+  await setLocked("g1", c.code, true);
+  await assert.rejects(giftCard("g1", "g2", c.code), /unlocked/);
+  await assert.rejects(rerollVariant("g1", c.code), /unlocked/);
+  await setLocked("g1", c.code, false);
+  await giftCard("g1", "g2", c.code);
+  assert.equal((await UserCard.findOne({ code: c.code }))!.ownerId, "g2");
+  await User.updateOne({ discordId: "g2" }, { coins: 1000 });
+  const r = await rerollVariant("g2", c.code, () => 0); // rng 0 → first variant (normal)
+  assert.equal(r.variant, "normal");
+  assert.equal(await coinsOf("g2"), 1000 - r.cost);
+});
+
+test("tower: a win clears the floor once; First steps pays once when every step is done", async () => {
+  await ensureUser("tw", "climber");
+  const r = await towerFight("tw", () => 0.99); // strong roll vs floor 1 commons
+  if (r.winner === "a") {
+    assert.equal((await User.findOne({ discordId: "tw" }))!.towerFloor, 1);
+    assert.ok(r.reward && r.reward.coins > 0);
+  }
+  for (const k of ["hunt", "feed", "work", "burrow", "win"] as const) await bump("tw", k);
+  const first = await claimQuests("tw");
+  assert.ok(first.tutorialPaid);
+  const again = await claimQuests("tw").catch(() => ({ tutorialPaid: false }));
+  assert.equal(again.tutorialPaid, false);
 });

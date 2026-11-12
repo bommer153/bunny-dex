@@ -1,7 +1,7 @@
 // Pure game math: no DB, no Discord. Everything here is unit-tested in rules.test.ts.
 import { randomBytes } from "node:crypto";
-import { CARDS, RARITIES, getCard, type CardDef, type Rarity } from "./data/cards";
-import { BURROW_RATE, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ELEMENT_ADVANTAGE, LEVEL_CAP, RARITY_WEIGHT, VARIANTS, variantInfo } from "./config";
+import { CARDS, ELEMENTS, RARITIES, getCard, type CardDef, type Element, type Rarity } from "./data/cards";
+import { BURROW_RATE, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ELEMENT_ADVANTAGE, LEVEL_CAP, QUESTS, RARITY_WEIGHT, TRAITS, VARIANTS, variantInfo, type Quest } from "./config";
 
 export type Rng = () => number; // [0, 1)
 
@@ -28,9 +28,10 @@ export function rollHunt(rng: Rng, opts: { clover?: boolean; pity?: boolean } = 
   const rarity = rollRarity(rng, opts);
   const pool = CARDS.filter((c) => c.rarity === rarity);
   const card = pool[Math.floor(rng() * pool.length)];
-  const variant = weightedPick(VARIANTS, (v) => v.weight, rng).code;
-  return { card, variant };
+  return { card, variant: rollVariant(rng) };
 }
+
+export const rollVariant = (rng: Rng): string => weightedPick(VARIANTS, (v) => v.weight, rng).code;
 
 export const nextRarity = (r: Rarity): Rarity | undefined => RARITIES[RARITIES.indexOf(r) + 1];
 
@@ -157,12 +158,44 @@ export const auctionSlots = (playerLvl: number) =>
   CONFIG.auctionBaseSlots + Math.floor(playerLvl / CONFIG.auctionSlotsPerLevels);
 
 // ---- Battle ----
-export type Fighter = { def: CardDef; level: number; code: string };
+export type Fighter = { def: CardDef; level: number; code: string; variant?: string };
+const RARITY_RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i])) as Record<Rarity, number>;
 
-export function lanePower(me: Fighter, foe: Fighter | undefined) {
+/** One card's power in its lane: stats, element advantage, element trait, variant (+4% per variant step) and team bonus. */
+export function lanePower(me: Fighter, foe: Fighter | undefined, lane = 0, teamMult = 1) {
   const s = cardStats(me.def, me.level);
-  const adv = foe && ELEMENT_ADVANTAGE[me.def.element] === foe.def.element ? 1.25 : 1;
-  return s.atk * 1.2 * adv + s.def + s.hp * 0.15;
+  const el = me.def.element;
+  let atk = s.atk * (el === "fire" ? 1.15 : 1) * (foe?.def.element === "ice" ? 0.85 : 1);
+  if (el === "shadow" && foe && RARITY_RANK[foe.def.rarity] > RARITY_RANK[me.def.rarity]) atk *= 1.2;
+  const def = s.def * (el === "nature" ? 1.15 : 1);
+  const hp = s.hp * (el === "water" ? 1.3 : 1);
+  const adv = foe && ELEMENT_ADVANTAGE[el] === foe.def.element ? 1.25 : 1;
+  const surge = el === "electric" && lane === 0 ? 1.15 : 1;
+  const variant = 1 + (variantInfo(me.variant ?? "normal").mult - 1) * 0.04;
+  return (atk * 1.2 * adv + def + hp * 0.15) * surge * variant * teamMult;
+}
+
+/** Team-wide bonuses: same element ×2 +5% / ×3 +12% (those cards), a full team from one set +8%, each light card blesses the other lanes +4%. */
+export function teamBonus(team: (Fighter | undefined)[]) {
+  const mult = team.map(() => 1);
+  const notes: string[] = [];
+  for (const el of ELEMENTS) {
+    const n = team.filter((f) => f?.def.element === el).length;
+    const b = n >= 3 ? 0.12 : n === 2 ? 0.05 : 0;
+    if (!b) continue;
+    team.forEach((f, i) => { if (f?.def.element === el) mult[i] += b; });
+    notes.push(`${TRAITS[el].name.split(" ")[0]}×${n} +${Math.round(b * 100)}%`);
+  }
+  const set = team[0]?.def.setId;
+  if (team.length >= CONFIG.teamSize && team.every((f) => f && f.def.setId === set)) {
+    mult.forEach((_, i) => (mult[i] += 0.08));
+    notes.push(`📦 ${set} set +8%`);
+  }
+  team.forEach((f, j) => {
+    if (f?.def.element !== "light") return;
+    team.forEach((g, i) => { if (g && i !== j) mult[i] += 0.04; });
+  });
+  return { mult, notes };
 }
 
 /** Best-of-lanes auto battle. Empty lane loses. ±10% random swing per lane. */
@@ -170,16 +203,18 @@ export function resolveBattle(a: Fighter[], b: Fighter[], rng: Rng) {
   const lanes = [];
   let aWins = 0;
   let bWins = 0;
+  const ta = teamBonus(a);
+  const tb = teamBonus(b);
   for (let i = 0; i < CONFIG.teamSize; i++) {
-    const pa = a[i] ? lanePower(a[i], b[i]) * (0.9 + rng() * 0.2) : 0;
-    const pb = b[i] ? lanePower(b[i], a[i]) * (0.9 + rng() * 0.2) : 0;
+    const pa = a[i] ? lanePower(a[i], b[i], i, ta.mult[i]) * (0.9 + rng() * 0.2) : 0;
+    const pb = b[i] ? lanePower(b[i], a[i], i, tb.mult[i]) * (0.9 + rng() * 0.2) : 0;
     const winner = pa === pb ? null : pa > pb ? "a" : "b";
     if (winner === "a") aWins++;
     if (winner === "b") bWins++;
     lanes.push({ a: a[i], b: b[i], pa: Math.round(pa), pb: Math.round(pb), winner });
   }
   const winner = aWins === bWins ? null : aWins > bWins ? "a" : "b";
-  return { lanes, winner } as const;
+  return { lanes, winner, bonus: { a: ta.notes, b: tb.notes } } as const;
 }
 
 // ---- Auction ----
@@ -204,3 +239,54 @@ export { formatDuration } from "./format";
 
 /** Short id players type. 6 base36 chars ≈ 2 billion values; DB unique index catches the rare collision. */
 export const makeCode = () => BigInt("0x" + randomBytes(5).toString("hex")).toString(36).slice(-6).padStart(6, "0");
+
+// ---- Daily streak ----
+
+/** Streak after a daily claim at `now`: +1 if the previous claim was recent enough, else it restarts at 1. */
+export function nextStreak(last: Date | null | undefined, streak: number, now: Date) {
+  return last && now.getTime() - last.getTime() <= CONFIG.streakGraceMs ? streak + 1 : 1;
+}
+/** Day 1–7 of the weekly reward cycle. Day 7 adds a guaranteed rare+ card. */
+export const streakDay = (streak: number) => ((Math.max(1, streak) - 1) % 7) + 1;
+/** Daily coins grow 25% per streak day: 250 on day 1, 625 on day 7. */
+export const streakCoins = (streak: number) => Math.round(CONFIG.dailyCoins * (1 + 0.25 * (streakDay(streak) - 1)));
+
+// ---- Quests ----
+
+const hash = (s: string) => [...s].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7);
+/** The player's 3 daily quests: stable for the whole day, different per player and per day. */
+export function dailyQuests(discordId: string, day: string): Quest[] {
+  return [...QUESTS].sort((a, b) => hash(`${discordId}${day}${a.id}`) - hash(`${discordId}${day}${b.id}`)).slice(0, 3);
+}
+/** Monday ("YYYY-MM-DD") of the week containing `day` (a shopDay string). */
+export function weekKey(day: string) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+// ---- Element sets ----
+
+export const setTitle = (el: Element) => `${el[0].toUpperCase()}${el.slice(1)} Keeper`;
+/** Elements the player owns every card of. */
+export const completedSets = (owned: Set<string>) => ELEMENTS.filter((el) => CARDS.filter((c) => c.element === el).every((c) => owned.has(c.slug)));
+
+// ---- Pacing ----
+
+/** Hunt XP for `count` hunts when `doneToday` were already done: full up to the daily cap, half after. */
+export function huntXp(doneToday: number, count: number) {
+  const full = Math.max(0, Math.min(count, CONFIG.huntXpDailyCap - doneToday));
+  return full * CONFIG.huntXp + Math.floor(((count - full) * CONFIG.huntXp) / 2);
+}
+
+// ---- Meadow Tower (PvE) ----
+
+/** Fixed enemy team for a floor: 5 floors per rarity tier (mythic from floor 26), levels rise with the floor. */
+export function towerTeam(floor: number): Fighter[] {
+  const tier = RARITIES[Math.min(5, Math.floor((floor - 1) / 5))];
+  const pool = CARDS.filter((c) => c.rarity === tier);
+  const level = Math.min(LEVEL_CAP[tier], floor);
+  return Array.from({ length: CONFIG.teamSize }, (_, i) => ({ def: pool[(floor * 7 + i * 3) % pool.length], level, code: `tower${floor}-${i}` }));
+}
+/** Coins every floor; shards every 5th floor. */
+export const towerReward = (floor: number) => ({ coins: 40 * floor, shards: floor % 5 === 0 ? floor * 2 : 0 });

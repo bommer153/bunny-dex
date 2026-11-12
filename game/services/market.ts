@@ -8,6 +8,11 @@ import { addCoins, getUser, spendCoins } from "./player";
 
 const afterFee = (amount: number) => amount - Math.floor(amount * CONFIG.marketFee);
 
+/** Last sale prices for a card, newest first: a price guide for buyers and sellers. */
+export async function recentSales(slug: string, limit = 5) {
+  return Listing.find({ slug, status: "sold" }, { price: 1, variant: 1, level: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).limit(limit).lean();
+}
+
 function checkPrice(n: number, what: string) {
   if (!Number.isInteger(n) || n < 1 || n > 1_000_000_000) fail("INVALID", `${what} must be a whole number from 1 to 1,000,000,000.`);
 }

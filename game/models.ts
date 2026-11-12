@@ -12,6 +12,21 @@ const userSchema = new Schema(
     items: { type: Map, of: Number, default: {} },
     deck: { type: [String], default: [] }, // UserCard codes, max CONFIG.teamSize
     lastDaily: Date,
+    streak: { type: Number, default: 0 }, // consecutive daily claims
+    // Quests: counters reset when questDay/questWeek no longer match the current day/week.
+    questDay: String,
+    questWeek: String,
+    dayCounts: { type: Map, of: Number, default: {} },
+    weekCounts: { type: Map, of: Number, default: {} },
+    dayClaimed: { type: [String], default: [] },
+    weekClaimed: { type: [String], default: [] },
+    titles: { type: [String], default: [] }, // earned by completing an element set
+    shards: { type: Number, default: 0, min: 0 }, // from breaking cards down; spent to craft a chosen card
+    towerFloor: { type: Number, default: 0 }, // highest Meadow Tower floor cleared
+    guilds: { type: [String], default: [], index: true }, // servers the player has played in (server leaderboards)
+    wishlist: { type: [String], default: [] }, // card slugs
+    tutorial: { type: [String], default: [] }, // "First steps" done so far
+    tutorialDone: { type: Boolean, default: false }, // reward claimed
     // No default on purpose: missing = "full", so existing players start full and the spend guard can match a missing field.
     energy: Number,
     energyAt: Date, // when `energy` was last stored; regen counts from here
@@ -41,6 +56,7 @@ const userCardSchema = new Schema(
     level: { type: Number, default: 1 },
     xp: { type: Number, default: 0 },
     status: { type: String, enum: CARD_STATUSES, default: "available" },
+    locked: { type: Boolean, default: false }, // 🔒 never fed, combined, sold or traded away
     burrowSince: Date,
   },
   { timestamps: true },
