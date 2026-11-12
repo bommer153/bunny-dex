@@ -42,7 +42,8 @@ export async function claimQuests(discordId: string, now = new Date()) {
   if (!ready.length && !firstSteps) fail("INVALID", "No finished quests to claim yet.");
   let tutorialPaid = false;
   if (firstSteps) {
-    const r = await User.updateOne({ discordId, tutorialDone: false }, { $set: { tutorialDone: true }, $inc: { coins: CONFIG.tutorialCoins, "items.clover": 2 } });
+    // $ne: older players have no tutorialDone field at all.
+    const r = await User.updateOne({ discordId, tutorialDone: { $ne: true } }, { $set: { tutorialDone: true }, $inc: { coins: CONFIG.tutorialCoins, "items.clover": 2 } });
     tutorialPaid = r.modifiedCount === 1;
   }
   const got: QuestRow[] = [];

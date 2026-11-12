@@ -322,3 +322,16 @@ test("tower: a win clears the floor once; First steps pays once when every step 
   const again = await claimQuests("tw").catch(() => ({ tutorialPaid: false }));
   assert.equal(again.tutorialPaid, false);
 });
+
+test("players from before the tower/quests update (fields missing in the DB) still climb and get paid", async () => {
+  await ensureUser("old", "veteran");
+  await User.collection.updateOne({ discordId: "old" }, { $unset: { towerFloor: "", tutorialDone: "" } });
+  const r1 = await towerFight("old", () => 0.99);
+  assert.equal(r1.floor, 1);
+  if (r1.winner === "a") {
+    assert.ok(r1.reward, "first win pays");
+    assert.equal((await towerFight("old", () => 0.99)).floor, 2, "next climb is floor 2, not floor 1 again");
+  }
+  for (const k of ["hunt", "feed", "work", "burrow", "win"] as const) await bump("old", k);
+  assert.ok((await claimQuests("old")).tutorialPaid);
+});

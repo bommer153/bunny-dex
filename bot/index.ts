@@ -39,7 +39,9 @@ const client = new Client({
 const errorText = (e: unknown) => {
   if (e instanceof GameError) return `❌ ${e.message}`;
   console.error(e);
-  return "❌ Something went wrong. Try again in a moment.";
+  // A short tag (error type + Discord error code) so a player's screenshot is enough to find the cause in the logs.
+  const tag = e instanceof Error ? `${e.name}${(e as { code?: unknown }).code !== undefined ? ` ${(e as { code?: unknown }).code}` : ""}` : "unknown";
+  return `❌ Something went wrong (${tag}). Try again in a moment.`;
 };
 
 /** Error text plus suggested next-step buttons (e.g. "Buy some in `bd shop`" gets a Shop button). */

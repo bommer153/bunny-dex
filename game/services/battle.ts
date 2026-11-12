@@ -64,7 +64,9 @@ export async function towerFight(aId: string, rng: Rng = Math.random) {
   let reward = null;
   if (result.winner === "a") {
     // Guarded on the floor number so a double click can't clear (and pay) the same floor twice.
-    const r = await User.updateOne({ discordId: aId, towerFloor: u.towerFloor ?? 0 }, { $set: { towerFloor: floor } });
+    // Players from before the tower have no towerFloor field at all (Mongoose shows the default 0, but the DB doesn't match 0).
+    const prev = floor - 1;
+    const r = await User.updateOne({ discordId: aId, towerFloor: prev === 0 ? { $in: [0, null] } : prev }, { $set: { towerFloor: floor } });
     if (r.modifiedCount) {
       reward = towerReward(floor);
       await User.updateOne({ discordId: aId }, { $inc: { coins: reward.coins, shards: reward.shards } });
