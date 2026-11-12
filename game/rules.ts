@@ -1,7 +1,8 @@
 // Pure game math: no DB, no Discord. Everything here is unit-tested in rules.test.ts.
 import { randomBytes } from "node:crypto";
+import { teamBonus } from "./synergy";
 import { CARDS, ELEMENTS, RARITIES, getCard, type CardDef, type Element, type Rarity } from "./data/cards";
-import { BURROW_RATE, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ELEMENT_ADVANTAGE, LEVEL_CAP, QUESTS, RARITY_WEIGHT, TRAITS, VARIANTS, variantInfo, type Quest } from "./config";
+import { BURROW_RATE, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ELEMENT_ADVANTAGE, LEVEL_CAP, QUESTS, RARITY_WEIGHT, VARIANTS, variantInfo, type Quest } from "./config";
 
 export type Rng = () => number; // [0, 1)
 
@@ -175,28 +176,7 @@ export function lanePower(me: Fighter, foe: Fighter | undefined, lane = 0, teamM
   return (atk * 1.2 * adv + def + hp * 0.15) * surge * variant * teamMult;
 }
 
-/** Team-wide bonuses: same element ×2 +5% / ×3 +12% (those cards), a full team from one set +8%, each light card blesses the other lanes +4%. */
-export function teamBonus(team: (Fighter | undefined)[]) {
-  const mult = team.map(() => 1);
-  const notes: string[] = [];
-  for (const el of ELEMENTS) {
-    const n = team.filter((f) => f?.def.element === el).length;
-    const b = n >= 3 ? 0.12 : n === 2 ? 0.05 : 0;
-    if (!b) continue;
-    team.forEach((f, i) => { if (f?.def.element === el) mult[i] += b; });
-    notes.push(`${TRAITS[el].name.split(" ")[0]}×${n} +${Math.round(b * 100)}%`);
-  }
-  const set = team[0]?.def.setId;
-  if (team.length >= CONFIG.teamSize && team.every((f) => f && f.def.setId === set)) {
-    mult.forEach((_, i) => (mult[i] += 0.08));
-    notes.push(`📦 ${set} set +8%`);
-  }
-  team.forEach((f, j) => {
-    if (f?.def.element !== "light") return;
-    team.forEach((g, i) => { if (g && i !== j) mult[i] += 0.04; });
-  });
-  return { mult, notes };
-}
+export { teamBonus } from "./synergy";
 
 /** Best-of-lanes auto battle. Empty lane loses. ±10% random swing per lane. */
 export function resolveBattle(a: Fighter[], b: Fighter[], rng: Rng) {

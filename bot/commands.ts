@@ -1,11 +1,12 @@
-import { ButtonStyle, StringSelectMenuBuilder, UserSelectMenuBuilder, type Message, type MessageCreateOptions } from "discord.js";
-import { CARDS, ELEMENTS, RARITIES, findCard, getCard, type Rarity } from "../game/data/cards";
+import { ButtonStyle, EmbedBuilder, PermissionFlagsBits, StringSelectMenuBuilder, UserSelectMenuBuilder, type Message, type MessageCreateOptions } from "discord.js";
+import { CARDS, RARITIES, findCard, getCard, type Rarity } from "../game/data/cards";
 // shortcut: no per-command rate limit beyond game cooldowns; add one if spam becomes a problem.
-import { COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ITEMS, RARITY_EMOJI, REROLL_COST, SHARD_YIELD, TRAITS, craftCost, itemInfo, variantInfo } from "../game/config";
+import { COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ITEMS, RARITY_EMOJI, REROLL_COST, SHARD_YIELD, TRAITS, itemInfo, variantInfo } from "../game/config";
 import { NEWS } from "../game/news";
 import { fail } from "../game/errors";
 import { GUIDE, findGuide } from "../game/guide";
-import { UserCard, type TradeDoc } from "../game/models";
+import { Guild, User, UserCard, type TradeDoc } from "../game/models";
+import { collectionGrid } from "./grid";
 import { auctionSlots, autoPick, burrowSlots, cardValue, completedSets, towerReward, towerTeam, energyWaitMs, formatDuration, isRarePlus, nextMinBid, nextRarity, parseDuration, setTitle, streakCoins } from "../game/rules";
 import * as quests from "../game/services/quests";
 import * as player from "../game/services/player";
@@ -14,12 +15,12 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import { fx } from "./fx";
-import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, embed, info, mention, row } from "./ui";
+import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, embed, info, mention, row } from "./ui";
 
 /** `frames` are shown first, one after another, by editing the message (a simple Discord "animation"). */
 /** `frames` play first (message edits). `ms` = how long this frame stays up (default 900ms). */
 export type Reply = Pick<MessageCreateOptions, "content" | "embeds" | "components" | "files"> & { frames?: Reply[]; ms?: number };
-export type Ctx = { uid: string; name: string; channelId: string; args: string[]; guildId?: string | null };
+export type Ctx = { uid: string; name: string; channelId: string; args: string[]; guildId?: string | null; canManage?: boolean };
 type Handler = (ctx: Ctx) => Promise<Reply | string>;
 
 const P = CONFIG.prefix;
@@ -81,19 +82,30 @@ function renderCardPanelLite(def: ReturnType<typeof getCard>, code: string): Rep
 }
 
 export async function renderMenu(uid: string, name: string): Promise<Reply> {
-  const [en, u] = await Promise.all([player.getEnergy(uid), player.getUser(uid)]);
+  const [en, u, b, ready] = await Promise.all([player.getEnergy(uid), player.getUser(uid), cards.burrowStatus(uid), readyQuests(uid)]);
   const m = (cmd: string, label: string, style = ButtonStyle.Secondary) => btn(cid("menu", cmd, uid), label, style);
+  // "Today" strip: what's waiting, most valuable first. The first one becomes the big "Do this next" button.
+  const todo = ([
+    (!u.lastDaily || Date.now() - u.lastDaily.getTime() >= CONFIG.dailyCooldownMs) && ["daily", "📅 Claim daily", "📅 Your daily reward is ready"],
+    ready > 0 && ["quests claim", "🎁 Claim quests", `📜 ${ready} quest reward${ready > 1 ? "s" : ""} ready to claim`],
+    b.pending > 0 && ["burrow collect", "🕳️ Collect burrow", `🕳️ Your burrow has ${coins(b.pending)} waiting`],
+    en.energy >= en.max && ["hunt", "🌿 Hunt", "⚡ Energy is full, go use it"],
+    b.cards.length < b.slots && ["burrow", "🕳️ Fill burrow", `🕳️ ${b.slots - b.cards.length} empty burrow slot${b.slots - b.cards.length > 1 ? "s" : ""}`],
+  ].filter(Boolean) as [string, string, string][]);
+  const next = todo[0] ?? (en.energy >= CONFIG.energyCost.hunt ? ["hunt", "🌿 Hunt", ""] : ["tower", "🏰 Tower", ""]);
+  const today = todo.length ? todo.map((t) => t[2]).join("\n") : "✨ All caught up!";
   return {
     embeds: [
-      info(`${GEM} **${name}'s BunnyDex**\n${coins(u.coins)} · Level ${u.level} · ⚡ ${energyText({ ...en })}\n\nTap a button. Cards can be picked from menus, no codes needed.`)
+      info(`${GEM} **${name}'s BunnyDex**\n${coins(u.coins)} · Level ${u.level} · ⚡ ${bar(en.energy, en.max, 8)} ${energyText({ ...en })}\n\n**Today**\n${today}`)
         .setThumbnail(MASCOT_URL),
     ],
     files: [mascotFile()],
     components: [
-      row(m("hunt", "🌿 Hunt", ButtonStyle.Primary), m("work", "💼 Work"), m("daily", "📅 Daily"), m("battle", "⚔️ Battle"), m("profile", "👤 Profile")),
+      row(m("hunt", "🌿 Hunt"), m("work", "💼 Work"), m("daily", "📅 Daily"), m("battle", "⚔️ Battle"), m("profile", "👤 Profile")),
       row(m("col", "📚 Collection"), m("burrow", "🕳️ Burrow"), m("combine", "🧪 Combine"), m("deck", "🛡️ Deck"), m("dex", "📖 Dex")),
       row(m("shop", "🛒 Shop"), m("inv", "🎒 Inventory"), m("market", "🏪 Market"), m("auction", "🔨 Auctions"), m("lb", "🏆 Top")),
-      row(m("quests", "📜 Quests", ButtonStyle.Success), m("tower", "🏰 Tower"), m("shard", "💠 Shards"), m("news", "📰 News"), m("help", "❓ Help")),
+      row(m("quests", "📜 Quests"), m("tower", "🏰 Tower"), m("shard", "💠 Shards"), m("news", "📰 News"), m("help", "❓ Help")),
+      row(m(next[0], `▶️ Do this next: ${next[1]}`, ButtonStyle.Success)),
     ],
   };
 }
@@ -106,6 +118,8 @@ export async function renderCollection(uid: string, page = 1, rarity?: Rarity): 
     .setTitle(`📚 Collection${rarity ? ` · ${rarity}` : ""}`)
     .setDescription(res.cards.length ? res.cards.map(cardLine).join("\n") : "No cards here yet. Try `bd hunt`!")
     .setFooter({ text: `Page ${res.page}/${res.pages} · ${res.total} cards · Dex ${prog.owned}/${prog.total}` });
+  const grid = await collectionGrid(res.cards);
+  if (grid) e.setImage("attachment://collection.png");
   const menu = new StringSelectMenuBuilder()
     .setCustomId(cid("colr", "", uid))
     .setPlaceholder("Filter by rarity")
@@ -113,6 +127,7 @@ export async function renderCollection(uid: string, page = 1, rarity?: Rarity): 
   const r = rarity ?? "all";
   return {
     embeds: [e],
+    files: grid ? [grid] : [],
     components: [
       row(
         btn(cid("col", `${res.page - 1}:${r}`, uid), "◀", ButtonStyle.Secondary, res.page <= 1),
@@ -227,7 +242,7 @@ export function txReply(text: string): Reply {
 /** Burrow collect: a tunnel frame, then the coins and the refreshed burrow. */
 export async function burrowCollected(uid: string, got: number): Promise<Reply> {
   const tunnel = clipFrame("burrow", "🕳️ *Heading down the burrow…*");
-  return { ...(await renderBurrow(uid)), content: `🕳️ Collected ${coins(got)} from your burrow!`, frames: got > 0 && tunnel ? [tunnel] : [] };
+  return { ...(await renderBurrow(uid)), content: `🕳️ Your bunnies dug up ${coins(got)}! 🐇💨`, frames: got > 0 && tunnel ? [tunnel] : [] };
 }
 
 /** A frame showing an effect clip under some text, held for the clip length. null if the clip isn't built. */
@@ -248,21 +263,28 @@ export function revealFrames(rarity: Rarity, opening: string): Reply[] {
 export const huntButtons = (uid: string, code: string) => [
   row(
     btn(cid("hunt", "1", uid), "Hunt again", ButtonStyle.Primary),
-    btn(cid("hunt", "5", uid), "Hunt ×5", ButtonStyle.Primary),
-    btn(cid("hunt", "10", uid), "Hunt ×10", ButtonStyle.Primary),
+    btn(cid("hunt", "5", uid), "Hunt ×5"),
+    btn(cid("hunt", "10", uid), "Hunt ×10"),
     btn(cid("card", code, uid), "Open card"),
     btn(cid("menu", "menu", uid), "Menu"),
   ),
 ];
 
 /** Hunt 1, 5 or 10 times. Energy for the whole batch is spent at once (all or nothing). */
-export async function doHunt(uid: string, count = 1): Promise<Reply> {
+/** Set by the bot: posts a big pull to the server's announcement channel (if it has one). */
+export const hooks = { bigPull: async (guildId: string, text: string) => void [guildId, text] };
+
+export async function doHunt(uid: string, count = 1, guildId?: string | null): Promise<Reply> {
   const h = await player.huntMany(uid, count);
   const en = await player.getEnergy(uid);
   const cost = CONFIG.energyCost.hunt;
   const best = h.cards.reduce((x, y) => (RARITIES.indexOf(y.card.rarity) > RARITIES.indexOf(x.card.rarity) ? y : x));
   const fresh = h.cards.filter((c) => c.isNew).length;
+  const big = BIG.has(best.card.rarity);
+  const bigText = `${RARITY_EMOJI[best.card.rarity]} ${best.variant !== "normal" ? variantInfo(best.variant).name + " " : ""}**${best.card.name}**`;
+  if (big && guildId) void hooks.bigPull(guildId, `🌟 ${mention(uid)} just pulled ${bigText} (${best.card.rarity})!`).catch(() => {});
   const extra = [
+    big && `🌟 **${best.card.rarity.toUpperCase()} PULL!** 🌟`,
     fresh && `🆕 **New to your Dex!** ${fresh > 1 ? `+${fresh} · ` : ""}📖 ${h.dex}/${CARDS.length}`,
     h.cards.some((c) => c.pity) && "✨ Pity bonus!",
     h.cards.some((c) => c.clover) && "🍀 Clover active",
@@ -271,9 +293,9 @@ export async function doHunt(uid: string, count = 1): Promise<Reply> {
   ].filter(Boolean).join("\n");
   const fullAt = en.energy < en.max ? ` · full <t:${Math.floor((Date.now() + energyWaitMs(en, en.max)) / 1000)}:R>` : "";
   const status = [
-    { name: `${GEM} Energy`, value: `⚡ ${en.energy}/${en.max}${fullAt}`, inline: true },
+    { name: `${GEM} Energy`, value: `${bar(en.energy, en.max, 6)} ${en.energy}/${en.max}${fullAt}`, inline: true },
     { name: `${GEM} Next hunt`, value: en.energy >= cost ? "✅ Ready" : `⏳ in ${formatDuration(energyWaitMs(en, cost))}`, inline: true },
-    { name: `${GEM} Pity`, value: `Rare+ in **${h.pityIn}**`, inline: true },
+    { name: `${GEM} Pity`, value: `${bar(CONFIG.pityHunts - h.pityIn, CONFIG.pityHunts, 6)} rare+ in **${h.pityIn}**`, inline: true },
   ];
   const e = count === 1
     ? cardEmbed(best.card, { variant: best.variant, title: `🌿 You found ${RARITY_EMOJI[best.card.rarity]} ${best.variant !== "normal" ? best.variant + " " : ""}${best.card.name}!`, image: "full" })
@@ -285,7 +307,7 @@ export async function doHunt(uid: string, count = 1): Promise<Reply> {
   e.setFooter({ text: `+${h.xpGained} XP${h.xpGained < CONFIG.huntXp * count ? " (half XP after 100 hunts today)" : ""} · ${count > 1 ? `×${count} · ` : ""}costs ⚡${cost * count}` });
   const opening = count > 1 ? `🌿 *You sweep the meadow ${count} times…*` : "🌿 *You push through the tall grass…*";
   const clip = clipFrame(`hunt-${best.card.rarity}`, opening); // the result is already confirmed; the clip only builds up to it
-  return { content: extra || undefined, embeds: [e], files: [cardFile(best.card.slug)], components: huntButtons(uid, best.code), frames: clip ? [clip] : revealFrames(best.card.rarity, opening) };
+  return { content: extra || undefined, embeds: [e], files: [cardFile(best.card.slug)], components: huntButtons(uid, best.code), frames: clip ? [clip, ...revealFrames(best.card.rarity, opening).slice(big ? 1 : 3)] : revealFrames(best.card.rarity, opening) };
 }
 
 // ================= Commands =================
@@ -333,10 +355,10 @@ const commands: Record<string, Handler> = {
       .setColor(BRAND)
       .setTitle(`🐰 ${name}`)
       .addFields(
-        { name: "Level", value: `${p.lvl.level} (${p.lvl.into}/${p.lvl.need} XP)`, inline: true },
+        { name: "Level", value: `${p.lvl.level} ${bar(p.lvl.into, p.lvl.need, 6)}\n${p.lvl.into}/${p.lvl.need} XP`, inline: true },
         { name: "Coins", value: coins(u.coins), inline: true },
-        { name: "Dex", value: `${p.collected}/${p.total} · ${p.cards} cards`, inline: true },
-        { name: "Energy", value: energyText(en), inline: true },
+        { name: "Dex", value: `${bar(p.collected, p.total, 6)}\n${p.collected}/${p.total} · ${p.cards} cards`, inline: true },
+        { name: "Energy", value: `${bar(en.energy, en.max, 6)}\n${energyText(en)}`, inline: true },
         { name: "Hunts", value: String(u.stats?.hunts ?? 0), inline: true },
         { name: "Battles", value: `${u.stats?.battlesWon ?? 0}W / ${u.stats?.battlesLost ?? 0}L`, inline: true },
         { name: "Slots", value: `Burrow ${burrowSlots(u.level, u.extraBurrowSlots)} · Auctions ${auctionSlots(u.level)}`, inline: true },
@@ -346,7 +368,14 @@ const commands: Record<string, Handler> = {
         ...(u.wishlist?.length ? [{ name: "⭐ Wishlist", value: player.wishNames(u.wishlist).join(", ") }] : []),
         { name: "Titles", value: u.titles?.length ? u.titles.map((t) => `🏅 ${t}`).join(" · ") : "*Complete an element in your Dex*" },
       );
-    return { embeds: [e] };
+    if (u.titles?.length) e.setTitle(`🐰 ${name} · 🏅 ${u.titles.at(-1)}`);
+    const show = u.showcase ? await UserCard.findOne({ code: u.showcase, ownerId: target }).lean() : null;
+    if (!show) {
+      if (target === uid) e.setFooter({ text: `Show off a card here: ${P} showcase <code>` });
+      return { embeds: [e] };
+    }
+    e.addFields({ name: "🌟 Showcase", value: cardLine(show) }).setImage(`attachment://${show.slug}.png`).setColor(RARITY_COLOR[getCard(show.slug).rarity]);
+    return { embeds: [e], files: [cardFile(show.slug)] };
   },
 
   async bal({ uid }) {
@@ -356,8 +385,7 @@ const commands: Record<string, Handler> = {
   async energy({ uid }) {
     const e = await player.getEnergy(uid);
     const full = e.energy >= e.max ? "Full!" : `Full in ${formatDuration(energyWaitMs(e, e.max))}.`;
-    const bar = "▰".repeat(Math.round((Math.min(e.energy, e.max) / e.max) * 10)).padEnd(10, "▱");
-    return `⚡ ${bar} **${energyText(e)}** · ${full}\nhunt ${CONFIG.energyCost.hunt} · work ${CONFIG.energyCost.work} · battle random ${CONFIG.energyCost.battle}`;
+    return `⚡ ${bar(e.energy, e.max)} **${energyText(e)}** · ${full}\nhunt ${CONFIG.energyCost.hunt} · work ${CONFIG.energyCost.work} · battle random ${CONFIG.energyCost.battle}`;
   },
 
   async daily({ uid }) {
@@ -382,8 +410,8 @@ const commands: Record<string, Handler> = {
     return { embeds: [e], files: c ? [c.file] : [] };
   },
 
-  async hunt({ uid, args }) {
-    return doHunt(uid, args[0] ? Number(args[0]) : 1); // bd hunt 5 / bd hunt 10
+  async hunt({ uid, args, guildId }) {
+    return doHunt(uid, args[0] ? Number(args[0]) : 1, guildId); // bd hunt 5 / bd hunt 10
   },
 
   async col({ uid, args }) {
@@ -398,7 +426,6 @@ const commands: Record<string, Handler> = {
     const done = new Set(completedSets(p.ownedSlugs));
     const sets = p.element.map((el) => `${done.has(el.key) ? "🏅" : "▫️"} ${el.key} ${el.owned}/${el.total}${done.has(el.key) ? ` · **${setTitle(el.key)}**` : ""}`).join("\n");
     const news = earned.map((t) => `🎉 Set complete! Title **${t}** + ${coins(CONFIG.setRewardCoins)}\n`).join("");
-    const bar = (o: number, t: number) => "▰".repeat(Math.round((o / t) * 10)).padEnd(10, "▱");
     const lines = p.rarity.map((r) => `${RARITY_EMOJI[r.key]} ${r.key.padEnd(9)} ${bar(r.owned, r.total)} ${r.owned}/${r.total}`);
     const missing = CARDS.filter((c) => !p.ownedSlugs.has(c.slug)).map((c) => c.name);
     return { embeds: [info(`${news}📖 **Dex ${p.owned}/${p.total}**\n\`\`\`\n${lines.join("\n")}\n\`\`\`${missing.length ? `Missing: ${missing.slice(0, 15).join(", ")}${missing.length > 15 ? "…" : ""}` : "🎉 Complete!"}\n\n**Element sets** (finish one for a title + ${coins(CONFIG.setRewardCoins)})\n${sets}`)] };
@@ -419,7 +446,7 @@ const commands: Record<string, Handler> = {
     const what = need(args[1], "feed <card code> <fodder codes…> | carrot [qty]").toLowerCase();
     if (what === "carrot" || what === "golden-carrot") {
       const r = await cards.feed(uid, target, { item: what, qty: args[2] ? int(args[2], "Quantity") : 1 });
-      return `🥕 **${r.card.name}** gained ${r.gained} XP → Lv ${r.level}${r.level > r.from ? " 🎉" : ""}${r.capped ? " (max level)" : ""}`;
+      return `🥕 Nom nom! **${r.card.name}** munched the carrots: +${r.gained} XP → Lv ${r.level}${r.level > r.from ? " 🎉" : ""}${r.capped ? " (max level)" : ""}`;
     }
     const fodder = args.slice(1, 11);
     // Feeding destroys cards, so confirm first.
@@ -495,7 +522,7 @@ const commands: Record<string, Handler> = {
 
   async buy({ uid, args }) {
     const r = await player.buyItem(uid, need(args[0], "buy <item> [qty]").toLowerCase(), args[1] ? int(args[1], "Quantity") : 1);
-    return `🛒 Bought ${r.item.name} ×${r.qty} for ${coins(r.cost)}.`;
+    return `🧺 Into the basket: ${r.item.name} ×${r.qty} for ${coins(r.cost)}.`;
   },
 
   async inv({ uid }) {
@@ -640,7 +667,7 @@ const commands: Record<string, Handler> = {
     const mine = (await cards.getTeam(uid)).map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
     const r = towerReward(floor);
     return {
-      embeds: [info(`🏰 **Meadow Tower · floor ${floor}/${CONFIG.towerMaxFloor}**\n${foes}\n\n**Your deck**\n${mine}\n\nReward: ${coins(r.coins)}${r.shards ? ` + 💠 ${r.shards} shards` : ""} · costs ⚡${CONFIG.energyCost.battle}`)],
+      embeds: [info(`🏰 **Meadow Tower · floor ${floor}/${CONFIG.towerMaxFloor}** ${bar(floor - 1, CONFIG.towerMaxFloor)}\n${foes}\n\n**Your deck**\n${mine}\n\nReward: ${coins(r.coins)}${r.shards ? ` + 💠 ${r.shards} shards` : ""} · costs ⚡${CONFIG.energyCost.battle}`)],
       components: [row(btn(cid("tower", "fight", uid), `⚔️ Climb floor ${floor}`, ButtonStyle.Primary), btn(cid("menu", "deck", uid), "🛡️ Edit deck"), btn(cid("menu", "menu", uid), "🏠 Menu"))],
     };
   },
@@ -705,6 +732,23 @@ const commands: Record<string, Handler> = {
     return NEWS.slice(0, 3).map((n) => `📰 **${n.title}** · ${n.date}\n${n.lines.map((l) => `• ${l}`).join("\n")}`).join("\n\n");
   },
 
+  async showcase({ uid, args }) {
+    const c = await cards.getOwnedCard(uid, need(args[0], "showcase <card code>"));
+    await User.updateOne({ discordId: uid }, { showcase: c.code });
+    return `🌟 ${cardLine(c)} is now the star of your profile.`;
+  },
+
+  async announce({ guildId, channelId, args, canManage }) {
+    if (!guildId) fail("INVALID", "Use this in a server channel.");
+    if (!canManage) fail("INVALID", "Only members with **Manage Server** can set this.");
+    if (args[0]?.toLowerCase() === "off") {
+      await Guild.updateOne({ guildId }, { $unset: { announceChannelId: 1 } }, { upsert: true });
+      return "📣 Big-pull announcements are off for this server.";
+    }
+    await Guild.updateOne({ guildId }, { announceChannelId: channelId }, { upsert: true });
+    return `📣 Legendary, mythic and secret pulls in this server will be announced in <#${channelId}>. Turn off: \`${P} announce off\``;
+  },
+
   async lock({ uid, args }) {
     const c = await cards.setLocked(uid, need(args[0], "lock <card code>"), true);
     return `🔒 ${cardLine(c)} is locked. It won't be fed, combined, sold, listed or traded until you \`${P} unlock ${c.code}\`.`;
@@ -723,7 +767,7 @@ const commands: Record<string, Handler> = {
     const line = (q: (typeof b.quests)[number]) => {
       const n = Math.min(q.progress, q.goal);
       const reward = [coins(q.coins), ...Object.entries(q.items ?? {}).map(([k, v]) => `${itemInfo(k)?.name ?? k} ×${v}`)].join(" + ");
-      return `${q.claimed ? "✅" : n >= q.goal ? "🎁" : "⬜"} ${q.scope === "week" ? "**Weekly:** " : ""}${q.label} · ${n}/${q.goal}\n　${q.claimed ? "~~" : ""}${reward}${q.claimed ? "~~" : ""}`;
+      return `${q.claimed ? "✅" : n >= q.goal ? "🎁" : "⬜"} ${q.scope === "week" ? "**Weekly:** " : ""}${q.label} · ${bar(n, q.goal, 6)} ${n}/${q.goal}\n　${q.claimed ? "~~" : ""}${reward}${q.claimed ? "~~" : ""}`;
     };
     const claimed = got.length ? `🎉 Claimed ${got.length} quest${got.length > 1 ? "s" : ""}: ${coins(got.reduce((s, q) => s + q.coins, 0))}${got.some((q) => q.items) ? " + items" : ""}\n\n` : "";
     const ready = b.quests.some((q) => !q.claimed && q.progress >= q.goal) || !!b.tutorial?.every((t) => t.done);
@@ -752,9 +796,10 @@ export async function renderLeaderboard(kind: "coins" | "level" | "collection", 
   const menu = new StringSelectMenuBuilder().setCustomId(cid("lb", scope, "*")).addOptions(
     (["coins", "level", "collection"] as const).map((k) => ({ label: k, value: k, default: k === kind })),
   );
+  const who = (r: (typeof rows)[number]) => `${r.username || r.discordId}${r.title ? ` *🏅${r.title}*` : ""}`;
   // Your own row is bold with a gem and "← you", so it's easy to find without relying on colour.
   const line = (r: (typeof rows)[number], i: number) =>
-    r.discordId === me ? `${medal(i)} **${GEM} ${r.username || r.discordId} · ${fmt(r.value)}** ← you` : `${medal(i)} ${r.username || r.discordId} · ${fmt(r.value)}`;
+    r.discordId === me ? `${medal(i)} ${GEM} __${who(r)}__ · ${fmt(r.value)} ← **you**` : `${medal(i)} ${who(r)} · ${fmt(r.value)}`;
   const toggle = guildId ? btn(cid("lbs", `${kind}:global`, "*"), "🌍 Global") : btn(cid("lbs", `${kind}:server`, "*"), "🏠 This server");
   return { embeds: [info(`🏆 **Leaderboard · ${kind} · ${guildId ? "this server" : "global"}**\n${rows.map(line).join("\n") || "No players yet."}`)], components: [row(menu), row(toggle)] };
 }
@@ -762,7 +807,7 @@ export async function renderLeaderboard(kind: "coins" | "level" | "collection", 
 const ALIASES: Record<string, string> = {
   h: "hunt", p: "profile", start: "profile", me: "profile", cash: "bal", balance: "bal", collection: "col", c: "col",
   inventory: "inv", i: "inv", e: "energy", en: "energy", b: "battle", t: "trade", m: "market", auc: "auction", a: "auction", leaderboard: "lb", top: "lb",
-  guide: "help", commands: "help", home: "menu", play: "menu", q: "quests", quest: "quests", shards: "shard", wishlist: "wish", patch: "news", tw: "tower",
+  guide: "help", commands: "help", home: "menu", play: "menu", q: "quests", quest: "quests", shards: "shard", wishlist: "wish", patch: "news", tw: "tower", show: "showcase", fav: "showcase",
 };
 
 export function resolveCommand(name: string): Handler | undefined {
@@ -793,6 +838,7 @@ const NEXT: Record<string, [cmd: string, label: string][]> = {
   deck: [["battle random", "🎲 Random battle"], ["col", "📚 Collection"]],
   dex: [["hunt", "🌿 Hunt"], ["col", "📚 Collection"]],
   card: [["col", "📚 Collection"], ["combine", "🧪 Combine"]],
+  showcase: [["profile", "👤 Profile"], ["col", "📚 Collection"]],
 };
 export function nextButtons(cmd: string, uid: string) {
   const steps = (NEXT[ALIASES[cmd] ?? cmd] ?? []).map(([c, label], i) => btn(cid("menu", c, uid), label, i ? ButtonStyle.Secondary : ButtonStyle.Primary));
@@ -839,21 +885,49 @@ export async function renderShop(uid: string, slug?: string, qty = 1, note?: str
   };
 }
 
+/** How many finished quests (and First steps) wait to be claimed. */
+export async function readyQuests(uid: string) {
+  const b = await quests.questBoard(uid);
+  return b.quests.filter((q) => !q.claimed && q.progress >= q.goal).length + (b.tutorial?.every((t) => t.done) ? 1 : 0);
+}
+
+/**
+ * Adds the player's status (energy, coins, level) to the last embed's footer, so any reply can be read at a glance,
+ * and pops a "Quest complete!" note + Claim button when this action finished a quest (`readyBefore` = count before it).
+ */
+export async function withStatus(reply: Reply, uid: string, readyBefore?: number): Promise<Reply> {
+  const [en, u, ready] = await Promise.all([player.getEnergy(uid), player.getUser(uid), readyBefore === undefined ? 0 : readyQuests(uid)]);
+  const status = `⚡ ${en.energy}/${en.max} · 🪙 ${u.coins.toLocaleString()} · Lv ${u.level}`;
+  const last = reply.embeds?.at(-1);
+  if (last instanceof EmbedBuilder) {
+    const t = last.data.footer?.text;
+    last.setFooter({ text: t ? `${t}\n${status}` : status });
+  }
+  if (readyBefore !== undefined && ready > readyBefore) {
+    reply.content = `${reply.content ? `${reply.content}\n` : ""}📜 **Quest complete!** Your reward is waiting.`;
+    const rows = reply.components ?? [];
+    if (rows.length < 5) reply.components = [...rows, row(btn(cid("menu", "quests claim", uid), "🎁 Claim quest", ButtonStyle.Success))];
+  }
+  return reply;
+}
+
 /** Runs a command by name. Used by text commands and by menu buttons, so both behave the same. */
 export async function callCommand(name: string, ctx: Ctx): Promise<Reply> {
   const handler = resolveCommand(name);
   if (!handler) return { content: `Unknown command \`${name}\`. See \`${P} help\`.` };
+  const before = await readyQuests(ctx.uid);
   const out = await handler(ctx);
   const reply: Reply = typeof out === "string" ? { embeds: [info(out)] } : out; // an embed, so it carries the player header too
   if (!reply.components?.length) reply.components = nextButtons(name, ctx.uid); // never a dead end
-  return reply;
+  return withStatus(reply, ctx.uid, before);
 }
 
 export async function runCommand(msg: Message, name: string, args: string[]) {
   if (!resolveCommand(name)) return { content: `Unknown command \`${name}\`. See \`${P} help\` or \`${P} menu\`.` };
   const { isNew } = await player.ensureUser(msg.author.id, msg.author.username);
   await player.seenIn(msg.author.id, msg.guildId);
-  const reply = await callCommand(name, { uid: msg.author.id, name: msg.author.displayName, channelId: msg.channelId, args, guildId: msg.guildId });
+  const canManage = !!msg.member?.permissions.has(PermissionFlagsBits.ManageGuild);
+  const reply = await callCommand(name, { uid: msg.author.id, name: msg.author.displayName, channelId: msg.channelId, args, guildId: msg.guildId, canManage });
   if (isNew) {
     const welcome = `👋 Welcome to **BunnyDex**, ${msg.author.displayName}! You got ${coins(CONFIG.starterCoins)} and 4 starter bunnies. Try \`${P} hunt\` and \`${P} help\`.`;
     reply.content = reply.content ? `${welcome}\n\n${reply.content}` : welcome;

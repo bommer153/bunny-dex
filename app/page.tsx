@@ -2,6 +2,7 @@ import { CARDS } from "@/game/data/cards";
 import { CONFIG } from "@/game/config";
 import Image from "next/image";
 import { CardTile, button, ghostButton, grid, panel } from "./components";
+import Today from "./Today";
 
 const FEATURED = ["eclipse-empress", "polar-sovereign", "cinder-monarch", "aurora-myth", "meadow-hop"];
 
@@ -19,6 +20,7 @@ const FEATURES = [
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10 flex flex-col gap-12">
+      <Today />
       <section className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
         <div className="flex flex-col gap-4">
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400"><span className="gem" aria-hidden /> The bunny card game for Discord</p>

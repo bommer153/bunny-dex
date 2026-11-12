@@ -25,6 +25,7 @@ const userSchema = new Schema(
     towerFloor: { type: Number, default: 0 }, // highest Meadow Tower floor cleared
     guilds: { type: [String], default: [], index: true }, // servers the player has played in (server leaderboards)
     wishlist: { type: [String], default: [] }, // card slugs
+    showcase: String, // UserCard code shown big on the profile
     tutorial: { type: [String], default: [] }, // "First steps" done so far
     tutorialDone: { type: Boolean, default: false }, // reward claimed
     // No default on purpose: missing = "full", so existing players start full and the spend guard can match a missing field.
@@ -126,7 +127,11 @@ function getModel<S extends Schema>(name: string, schema: S) {
   return model(name, schema) as Model<InferSchemaType<S>>;
 }
 
+// Per-server settings. announceChannelId: where legendary+ pulls are posted (opt-in by a server manager).
+const guildSchema = new Schema({ guildId: { type: String, required: true, unique: true }, announceChannelId: String });
+
 export const User = getModel("User", userSchema);
+export const Guild = getModel("Guild", guildSchema);
 export const UserCard = getModel("UserCard", userCardSchema);
 export const Trade = getModel("Trade", tradeSchema);
 export const Listing = getModel("Listing", listingSchema);

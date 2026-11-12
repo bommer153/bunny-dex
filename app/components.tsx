@@ -21,13 +21,14 @@ const SHINY = new Set<Rarity>(["legendary", "mythic", "secret"]);
  * Card art + name + stats. `children` renders under it (e.g. action forms).
  * `index` staggers the entrance, `tilt` follows the pointer on desktop, `preview` opens a 3D close-up on click.
  */
-export function CardTile({ slug, variant = "normal", level = 1, code, status, href, index, tilt, preview, children }: {
+export function CardTile({ slug, variant = "normal", level = 1, code, status, href, index, tilt, preview, missing, children }: {
   slug: string; variant?: string; level?: number; code?: string; status?: string; href?: string;
-  index?: number; tilt?: boolean; preview?: boolean; children?: ReactNode;
+  index?: number; tilt?: boolean; preview?: boolean; missing?: boolean; children?: ReactNode;
 }) {
   const def = getCard(slug);
   const s = cardStats(def, level);
-  const art = <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={336} className="w-full h-auto rounded-lg" />;
+  // `missing`: a Dex slot you haven't caught yet, shown as a dark silhouette so empty slots pull you to collect.
+  const art = <Image src={`/cards/${slug}.png`} alt={missing ? "Not caught yet" : def.name} width={240} height={336} className={`w-full h-auto rounded-lg ${missing ? "brightness-0 opacity-50" : ""}`} />;
   const stats = `Lv ${level} · ⚔️${s.atk} 🛡️${s.def} ❤️${s.hp} · ${def.element}`;
   const top = preview
     ? <CardPreview slug={slug} name={def.name} rarity={def.rarity} variant={variant} stats={stats} code={code}>{art}</CardPreview>
@@ -40,10 +41,10 @@ export function CardTile({ slug, variant = "normal", level = 1, code, status, hr
       {top}
       <div>
         <div className={`font-semibold ${RARITY_TEXT[def.rarity]}`}>
-          {RARITY_EMOJI[def.rarity]} {variant !== "normal" && `${variantInfo(variant).name} `}{def.name}
+          {RARITY_EMOJI[def.rarity]} {missing ? "???" : <>{variant !== "normal" && `${variantInfo(variant).name} `}{def.name}</>}
         </div>
         <div className="text-xs text-plum-400">
-          {stats}
+          {missing ? `Not caught yet · ${def.element}` : stats}
           {code && <> · <code className="text-plum-300">{code}</code></>}
           {status && status !== "available" && <> · <em>{status}</em></>}
         </div>

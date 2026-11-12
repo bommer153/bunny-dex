@@ -25,11 +25,15 @@ import { RARITY_EMOJI, TRAITS, variantInfo } from "../game/config";
 import { cardStats } from "../game/rules";
 
 export const RARITY_COLOR: Record<Rarity, number> = {
-  common: 0x9ca3af, uncommon: 0x22c55e, rare: 0x3b82f6, epic: 0xa855f7, legendary: 0xeab308, mythic: 0xef4444, secret: 0x111827,
+  common: 0x9ca3af, uncommon: 0x22c55e, rare: 0x3b82f6, epic: 0xa855f7, legendary: 0xeab308, mythic: 0xef4444, secret: 0xe879f9, // same hues as the web (RARITY_TEXT / RARITY_RGB)
 };
 // BunnyDex look (from the card back): gold for results and rewards, violet for system/neutral messages.
 export const BRAND = 0xf0b12a; // gold
 export const VIOLET = 0x8b5cf6;
+export const RED = 0xdc2626; // errors
+
+/** Emoji progress bar: `▰▰▰▱▱▱▱▱▱▱`. */
+export const bar = (n: number, max: number, len = 10) => "▰".repeat(Math.round((Math.max(0, Math.min(n, max)) / Math.max(1, max)) * len)).padEnd(len, "▱");
 export const GEM = "◆";
 
 export const coins = (n: number) => `🪙 **${n.toLocaleString()}**`;

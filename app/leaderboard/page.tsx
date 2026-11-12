@@ -21,7 +21,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/lead
           <Link key={k} href={`/leaderboard?by=${k}`} className={`rounded-full px-3 py-1 ${k === kind ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>{k}</Link>
         ))}
       </div>
-      <RankList kind={kind} me={await getUid()} rows={rows.map((r) => ({ id: r.discordId, name: r.username || "Unknown", value: fmt(r.value) }))} />
+      <RankList kind={kind} me={await getUid()} rows={rows.map((r) => ({ id: r.discordId, name: `${r.username || "Unknown"}${r.title ? ` · 🏅 ${r.title}` : ""}`, value: fmt(r.value) }))} />
     </Page>
   );
 }

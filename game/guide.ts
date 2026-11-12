@@ -18,6 +18,8 @@ export const GUIDE: GuideSection[] = [
       { usage: "menu", desc: "A button menu for everything. Just typing `bd` opens it too. Cards are picked from dropdowns, no codes needed.", aliases: ["home", "play"] },
       { usage: "help [topic|command]", desc: "This guide. Pick a topic, e.g. `help auction`." },
       { usage: "profile [@user]", desc: "Level, coins, dex progress, energy and stats.", aliases: ["p", "me", "start"] },
+      { usage: "showcase <code>", desc: "Show off one card, big, on your profile.", aliases: ["show", "fav"] },
+      { usage: "announce [off]", desc: "Server managers: post legendary, mythic and secret pulls from this server in this channel." },
       { usage: "bal", desc: "Your coin balance.", aliases: ["cash", "balance"] },
       { usage: "energy", desc: "Your energy bar and when it refills.", aliases: ["e", "en"] },
     ],

@@ -179,8 +179,8 @@ export default function BattleScene({ team, energy, cost }: { team: TeamCard[]; 
   }
 
   const banner = result && phase === "done"
-    ? result.winner === "a" ? { t: `🏆 Victory vs ${result.opponent}!`, c: "text-goldfoil" }
-      : result.winner === "b" ? { t: `✕ Defeat vs ${result.opponent}`, c: "text-red-300" } : { t: `= Draw with ${result.opponent}`, c: "text-plum-200" }
+    ? result.winner === "a" ? { icon: "🏆", t: `Victory vs ${result.opponent}!`, c: "text-goldfoil" }
+      : result.winner === "b" ? { icon: "✕", t: `Defeat vs ${result.opponent}`, c: "text-red-300" } : { icon: "=", t: `Draw with ${result.opponent}`, c: "text-plum-200" }
     : null;
   const enough = energy >= cost;
 
@@ -220,7 +220,10 @@ export default function BattleScene({ team, energy, cost }: { team: TeamCard[]; 
         {banner && (
           <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-4">
             <div className={`anim-pop ${result?.winner === "a" ? "gold-frame" : ""}`}>
-              <p className={`${result?.winner === "a" ? "gold-frame-inner" : "rounded-2xl bg-plum-950/85"} px-5 py-2 text-center text-2xl font-extrabold sm:text-4xl ${banner.c}`}>{banner.t}</p>
+              <p className={`${result?.winner === "a" ? "gold-frame-inner" : "rounded-2xl bg-plum-950/85"} px-5 py-2 text-center text-2xl font-extrabold sm:text-4xl`}>
+                {/* Text effect on an inner span: text-goldfoil clips its own background to the letters, which the frame's background would override. */}
+                {banner.icon} <span className={banner.c}>{banner.t}</span>
+              </p>
             </div>
           </div>
         )}

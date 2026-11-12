@@ -115,7 +115,7 @@ export const RARITY_EMOJI: Record<Rarity, string> = {
   epic: "🟣",
   legendary: "🟡",
   mythic: "🔴",
-  secret: "⚫",
+  secret: "🌈",
 };
 
 export const VARIANTS = [

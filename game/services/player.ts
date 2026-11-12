@@ -283,11 +283,11 @@ export async function leaderboard(kind: "coins" | "level" | "collection", limit 
       { $sort: { n: -1 } },
       { $limit: limit },
     ]);
-    const users = await User.find({ discordId: { $in: rows.map((r) => r._id) } }, { discordId: 1, username: 1 });
-    const name = new Map(users.map((u) => [u.discordId, u.username]));
-    return rows.map((r) => ({ discordId: r._id, username: name.get(r._id) ?? "?", value: r.n }));
+    const users = await User.find({ discordId: { $in: rows.map((r) => r._id) } }, { discordId: 1, username: 1, titles: 1 });
+    const byId = new Map(users.map((u) => [u.discordId, u]));
+    return rows.map((r) => ({ discordId: r._id, username: byId.get(r._id)?.username ?? "?", value: r.n, title: byId.get(r._id)?.titles?.at(-1) }));
   }
   const sort = kind === "coins" ? "-coins" : "-xp";
-  const users = await User.find(inGuild, { discordId: 1, username: 1, coins: 1, level: 1 }).sort(sort).limit(limit);
-  return users.map((u) => ({ discordId: u.discordId, username: u.username, value: kind === "coins" ? u.coins : u.level }));
+  const users = await User.find(inGuild, { discordId: 1, username: 1, coins: 1, level: 1, titles: 1 }).sort(sort).limit(limit);
+  return users.map((u) => ({ discordId: u.discordId, username: u.username, value: kind === "coins" ? u.coins : u.level, title: u.titles?.at(-1) }));
 }

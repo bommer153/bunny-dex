@@ -1,6 +1,6 @@
 import "dotenv/config";
 import {
-  ActionRowBuilder, ButtonStyle, Client, Events, type ButtonInteraction, type StringSelectMenuInteraction, type UserSelectMenuInteraction, GatewayIntentBits, MessageFlags, ModalBuilder, Partials, StringSelectMenuBuilder,
+  ActionRowBuilder, ButtonStyle, Client, Events, type ButtonInteraction, type StringSelectMenuInteraction, type UserSelectMenuInteraction, GatewayIntentBits, MessageFlags, PermissionFlagsBits, ModalBuilder, Partials, StringSelectMenuBuilder,
   TextInputBuilder, TextInputStyle, type Interaction, type Message, type MessageActionRowComponentBuilder, type ModalActionRowComponentBuilder,
 } from "discord.js";
 import { connectDb } from "../game/db";
@@ -8,7 +8,7 @@ import { COMBINE_COUNT, CONFIG, RARITY_EMOJI, variantInfo } from "../game/config
 import { getCard } from "../game/data/cards";
 import { makeCode, rollHunt } from "../game/rules";
 import { GameError } from "../game/errors";
-import { UserCard } from "../game/models";
+import { Guild, UserCard } from "../game/models";
 import * as player from "../game/services/player";
 const { ensureUser } = player;
 import * as cards from "../game/services/cards";
@@ -16,10 +16,10 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import {
-  UNLOCKED, availableCards, errorButtons, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderShop, renderTrade, runCommand,
+  UNLOCKED, availableCards, errorButtons, hooks, readyQuests, withStatus, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderShop, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
-import { asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
+import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, mention, row } from "./ui";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
 import { nextMinBid } from "../game/rules";
@@ -43,7 +43,7 @@ const errorText = (e: unknown) => {
 };
 
 /** Error text plus suggested next-step buttons (e.g. "Buy some in `bd shop`" gets a Shop button). */
-const errorReply = (e: unknown, uid: string) => ({ content: errorText(e), components: errorButtons(e instanceof GameError ? e.message : "", e instanceof GameError ? e.code : undefined, uid) });
+const errorReply = (e: unknown, uid: string) => ({ embeds: [info(errorText(e), RED)], components: errorButtons(e instanceof GameError ? e.message : "", e instanceof GameError ? e.code : undefined, uid) });
 
 const dm = (id: string, text: string) => client.users.fetch(id).then((u) => u.send(text)).catch(() => {}); // DMs may be closed
 
@@ -135,7 +135,15 @@ const CAULDRON_SHAKE: Record<Rarity, string> = {
   secret: "",
 };
 
-const ctxOf = (i: Interaction, args: string[] = []): Ctx => ({ uid: i.user.id, name: i.user.displayName, channelId: i.channelId ?? "", args, guildId: i.guildId });
+const ctxOf = (i: Interaction, args: string[] = []): Ctx => ({ uid: i.user.id, name: i.user.displayName, channelId: i.channelId ?? "", args, guildId: i.guildId, canManage: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild) });
+
+// Legendary+ pulls go to the server's announcement channel, if a manager set one with `bd announce`.
+hooks.bigPull = async (guildId, text) => {
+  const g = await Guild.findOne({ guildId }).lean();
+  if (!g?.announceChannelId) return;
+  const ch = await client.channels.fetch(g.announceChannelId).catch(() => null);
+  if (ch?.isSendable()) await ch.send({ content: text, allowedMentions: { parse: [] } });
+};
 const privately = (r: Reply) => ({ ...r, flags: MessageFlags.Ephemeral as const });
 
 function modal(id: string, title: string, fields: [id: string, label: string, required: boolean, placeholder?: string][]) {
@@ -209,8 +217,10 @@ async function handleInteraction(i: Interaction) {
   if (i.isButton()) {
     const [sub, code] = arg.split(":");
     switch (action) {
-      case "hunt":
-        return animate(await doHunt(uid, Number(arg) || 1), onReply(i));
+      case "hunt": {
+        const before = await readyQuests(uid);
+        return animate(await withStatus(await doHunt(uid, Number(arg) || 1, i.guildId), uid, before), onReply(i));
+      }
       case "shopq":
         return void (await i.update(updateWith(await renderShop(uid, sub, Number(code) || 1))));
       case "shopgo": {
@@ -218,9 +228,10 @@ async function handleInteraction(i: Interaction) {
         return void (await i.update(updateWith(await renderShop(uid, sub, r.qty, `🛒 Bought ${r.item.name} ×${r.qty} for ${coins(r.cost)}.`))));
       }
       case "menu": {
-        if (arg === "menu") return void (await i.reply(await renderMenu(uid, i.user.displayName)));
+        // One message per flow: the screen changes in place instead of posting a new message.
+        if (arg === "menu") return void (await i.update(updateWith(await renderMenu(uid, i.user.displayName))));
         const [cmd, ...args] = arg.split(" ");
-        return animate(await callCommand(cmd, ctxOf(i, args)), onReply(i));
+        return animate(await callCommand(cmd, ctxOf(i, args)), onUpdate(i));
       }
       case "card":
         return void (await i.reply(privately(await renderCardPanel(uid, arg))));
