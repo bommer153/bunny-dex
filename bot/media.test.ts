@@ -4,6 +4,9 @@ import { fx, warmFx, fxNames } from "./fx";
 import { tryMedia, withoutMedia } from "./media";
 import { battleReply, clipFrame, renderHelp, txReply, type Reply } from "./commands";
 import { info } from "./ui";
+import sharp from "sharp";
+import { collectionGrid } from "./grid";
+import { CARDS, type Rarity } from "../game/data/cards";
 
 before(async () => { await warmFx(); });
 
@@ -62,4 +65,13 @@ test("help uses the mascot thumbnail and stays complete without media", () => {
   const plain = withoutMedia(r).embeds![0] as { description: string; thumbnail?: unknown };
   assert.equal(plain.thumbnail, undefined);
   assert.match(plain.description, /auction start/);
+});
+
+test("collection grid: a page with a legendary+ card loops as a GIF, other pages stay a PNG", async () => {
+  const of = (r: Rarity) => ({ slug: CARDS.find((c) => c.rarity === r)!.slug, level: 1 });
+  const gif = await collectionGrid([of("secret"), of("common")]);
+  assert.equal(gif?.name, "collection.gif");
+  const m = await sharp(gif!.attachment as Buffer, { animated: true }).metadata();
+  assert.ok(m.pages! > 1 && m.loop === 0 && m.delay!.every((d) => d > 0), JSON.stringify({ pages: m.pages, loop: m.loop, delay: m.delay }));
+  assert.equal((await collectionGrid([of("epic"), of("common")]))?.name, "collection.png");
 });

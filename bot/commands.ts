@@ -126,7 +126,7 @@ export async function renderCollection(uid: string, page = 1, rarity?: Rarity): 
     .setDescription(res.cards.length ? res.cards.map(cardLine).join("\n") : "No cards here yet. Try `bd hunt`!")
     .setFooter({ text: `Page ${res.page}/${res.pages} · ${res.total} cards · Dex ${prog.owned}/${prog.total}` });
   const grid = await collectionGrid(res.cards);
-  if (grid) e.setImage("attachment://collection.png");
+  if (grid) e.setImage(`attachment://${grid.name}`);
   const menu = new StringSelectMenuBuilder()
     .setCustomId(cid("colr", "", uid))
     .setPlaceholder("Filter by rarity")
@@ -371,7 +371,7 @@ const commands: Record<string, Handler> = {
         { name: "Slots", value: `Burrow ${burrowSlots(u.level, u.extraBurrowSlots)} · Auctions ${auctionSlots(u.level)}`, inline: true },
         { name: "Daily streak", value: `🔥 ${u.streak ?? 0}`, inline: true },
         { name: "Shards", value: `💠 ${u.shards ?? 0}`, inline: true },
-        { name: "Tower", value: `🏰 floor ${u.towerFloor ?? 0}/${CONFIG.towerMaxFloor}`, inline: true },
+        { name: "Tower", value: `🏰 floor ${u.towerFloor ?? 0}`, inline: true },
         ...(u.wishlist?.length ? [{ name: "⭐ Wishlist", value: player.wishNames(u.wishlist).join(", ") }] : []),
         { name: "Titles", value: u.titles?.length ? u.titles.map((t) => `🏅 ${t}`).join(" · ") : "*Complete an element in your Dex*" },
       );
@@ -685,12 +685,11 @@ const commands: Record<string, Handler> = {
   async tower({ uid }) {
     const u = await player.getUser(uid);
     const floor = (u.towerFloor ?? 0) + 1;
-    if (floor > CONFIG.towerMaxFloor) return `🏰 You've cleared all ${CONFIG.towerMaxFloor} floors of the Meadow Tower. Legend!`;
     const foes = towerTeam(floor).map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
     const mine = (await cards.getTeam(uid)).map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
     const r = towerReward(floor);
     return {
-      embeds: [info(`🏰 **Meadow Tower · floor ${floor}/${CONFIG.towerMaxFloor}** ${bar(floor - 1, CONFIG.towerMaxFloor)}\n${foes}\n\n**Your deck**\n${mine}\n\nReward: ${coins(r.coins)}${r.shards ? ` + 💠 ${r.shards} shards` : ""} · costs ⚡${CONFIG.energyCost.battle}`)],
+      embeds: [info(`🏰 **Meadow Tower · floor ${floor}**\n${foes}\n\n**Your deck**\n${mine}\n\nReward: ${coins(r.coins)}${r.shards ? ` + 💠 ${r.shards} shards` : ""} · costs ⚡${CONFIG.energyCost.battle}`)],
       components: [row(btn(cid("tower", "fight", uid), `⚔️ Climb floor ${floor}`, ButtonStyle.Primary), btn(cid("menu", "deck", uid), "🛡️ Edit deck"), btn(cid("menu", "menu", uid), "🏠 Menu"))],
     };
   },

@@ -220,6 +220,7 @@ test("hunt XP halves after the daily cap; tower floors get harder", () => {
   assert.equal(huntXp(cap - 5, 10), 5 * CONFIG.huntXp + Math.floor((5 * CONFIG.huntXp) / 2));
   assert.equal(towerTeam(1)[0].def.rarity, "common");
   assert.equal(towerTeam(30)[0].def.rarity, "mythic");
+  assert.equal(towerTeam(80)[0].level, 80, "no top floor: foes keep levelling past the card cap");
   assert.equal(towerTeam(3).length, CONFIG.teamSize);
   assert.equal(towerReward(5).shards, 10);
   assert.equal(towerReward(4).shards, 0);

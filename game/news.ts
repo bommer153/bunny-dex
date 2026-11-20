@@ -1,6 +1,14 @@
 // Patch notes for `bd news`, newest first. Add an entry with each release players should know about.
 export const NEWS: { date: string; title: string; lines: string[] }[] = [
   {
+    date: "2026-11-20",
+    title: "Endless tower, shinier collection",
+    lines: [
+      "🏰 **Meadow Tower** has no top floor any more: past floor 50 the bunnies keep levelling up. How high can your deck climb? `bd tower`",
+      "📚 `bd col` shows off rarity: rares glow, epics get a glass sheen, legendaries shimmer, mythics sparkle and secrets get a rainbow frame.",
+    ],
+  },
+  {
     date: "2026-11-12",
     title: "A fresh coat of paint",
     lines: [

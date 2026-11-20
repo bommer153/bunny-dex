@@ -256,9 +256,8 @@ async function handleInteraction(i: Interaction) {
         const won = r.reward ? `🏰 Floor ${r.floor} cleared! ${coins(r.reward.coins)}${r.reward.shards ? ` + 💠 ${r.reward.shards}` : ""}` : r.winner === "a" ? "Already cleared." : `💥 Floor ${r.floor} held. Level up or rework your deck.`;
         // Straight into the next fight (or a retry); the preview button stays for players who want to scout first.
         const beat = r.winner === "a";
-        const top = beat && r.floor >= CONFIG.towerMaxFloor;
         const next = [row(
-          ...(top ? [] : [btn(cid("tower", "fight", uid), beat ? `⚔️ Climb floor ${r.floor + 1}` : `⚔️ Retry floor ${r.floor}`, ButtonStyle.Primary)]),
+          btn(cid("tower", "fight", uid), beat ? `⚔️ Climb floor ${r.floor + 1}` : `⚔️ Retry floor ${r.floor}`, ButtonStyle.Primary),
           btn(cid("menu", "tower", uid), beat ? "🔭 Preview next" : "🔭 See floor"),
           btn(cid("menu", "deck", uid), "🛡️ Deck"),
           btn(cid("menu", "menu", uid), "🏠 Menu"),
@@ -296,7 +295,8 @@ async function handleInteraction(i: Interaction) {
       }
       case "col": {
         const [page, rarity] = arg.split(":");
-        return void (await i.update(updateWith(await renderCollection(uid, Number(page), rarity === "all" ? undefined : (rarity as Rarity)))));
+        await i.deferUpdate(); // an animated page takes a moment to draw
+        return animate(await renderCollection(uid, Number(page), rarity === "all" ? undefined : (rarity as Rarity)), onUpdate(i));
       }
       case "burrow": {
         if (arg === "collect") return animate(await burrowCollected(uid, await cards.burrowCollect(uid)), onUpdate(i));
@@ -426,7 +426,8 @@ async function handleInteraction(i: Interaction) {
     }
     if (action === "colr") {
       const r = i.values[0];
-      return void (await i.update(updateWith(await renderCollection(uid, 1, r === "all" ? undefined : (r as Rarity)))));
+      await i.deferUpdate(); // an animated page takes a moment to draw
+      return animate(await renderCollection(uid, 1, r === "all" ? undefined : (r as Rarity)), onUpdate(i));
     }
     if (action === "pick") return void (await i.reply(privately(await renderCardPanel(uid, i.values[0]))));
     if (action === "bsel") {

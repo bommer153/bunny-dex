@@ -51,11 +51,10 @@ export async function randomFight(aId: string, rng: Rng = Math.random, oppId?: s
   return { ...result, a, b, opponent: { discordId: opp.discordId, username: defender.username }, lvl };
 }
 
-/** Meadow Tower: fixed PvE floors. Clearing a floor pays once and unlocks the next. */
+/** Meadow Tower: endless fixed PvE floors. Clearing a floor pays once and unlocks the next. */
 export async function towerFight(aId: string, rng: Rng = Math.random) {
   const u = await getUser(aId);
   const floor = (u.towerFloor ?? 0) + 1;
-  if (floor > CONFIG.towerMaxFloor) fail("INVALID", "🏰 You've cleared the whole tower!");
   const a = await getTeam(aId);
   if (!a.length) fail("INVALID", "You need at least one card.");
   await spendEnergy(aId, CONFIG.energyCost.battle);

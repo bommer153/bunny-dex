@@ -12,7 +12,6 @@ export const CONFIG = {
   streakGraceMs: 48 * HOUR, // claim again within this or the streak resets
   setRewardCoins: 1000, // one-time, for owning every card of an element
   huntXpDailyCap: 100, // hunts per day at full XP; half XP after (keeps grinders from lapping everyone)
-  towerMaxFloor: 50,
   wishlistMax: 10,
   tutorialCoins: 500, // + 2 clovers, once, for finishing "First steps"
 

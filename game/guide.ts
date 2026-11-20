@@ -84,7 +84,7 @@ export const GUIDE: GuideSection[] = [
       { usage: "deck [codes…]", desc: `Show or set your ${CONFIG.teamSize}-card deck in lane order.` },
       { usage: "battle @user", desc: "Challenge a player. They press Accept.", aliases: ["b"] },
       { usage: "battle random", desc: `Scout a random player's deck first, then fight (⚡${c.battle}), find another, or edit your deck.` },
-      { usage: "tower", desc: `🏰 Meadow Tower: ${CONFIG.towerMaxFloor} PvE floors that get harder. Coins every floor, shards every 5th (⚡${c.battle}).`, aliases: ["tw"] },
+      { usage: "tower", desc: `🏰 Meadow Tower: endless PvE floors that keep getting harder. Coins every floor, shards every 5th (⚡${c.battle}).`, aliases: ["tw"] },
     ],
   },
   {

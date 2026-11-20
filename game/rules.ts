@@ -261,12 +261,14 @@ export function huntXp(doneToday: number, count: number) {
 
 // ---- Meadow Tower (PvE) ----
 
-/** Fixed enemy team for a floor: 5 floors per rarity tier (mythic from floor 26), levels rise with the floor. */
+/**
+ * Fixed enemy team for a floor: 5 floors per rarity tier (mythic from floor 26), level = floor.
+ * The tower never ends: past floor 50 foes level beyond the card cap, so even a perfect deck tops out (~floor 100).
+ */
 export function towerTeam(floor: number): Fighter[] {
   const tier = RARITIES[Math.min(5, Math.floor((floor - 1) / 5))];
   const pool = CARDS.filter((c) => c.rarity === tier);
-  const level = Math.min(LEVEL_CAP[tier], floor);
-  return Array.from({ length: CONFIG.teamSize }, (_, i) => ({ def: pool[(floor * 7 + i * 3) % pool.length], level, code: `tower${floor}-${i}` }));
+  return Array.from({ length: CONFIG.teamSize }, (_, i) => ({ def: pool[(floor * 7 + i * 3) % pool.length], level: floor, code: `tower${floor}-${i}` }));
 }
 /** Coins every floor; shards every 5th floor. */
 export const towerReward = (floor: number) => ({ coins: 40 * floor, shards: floor % 5 === 0 ? floor * 2 : 0 });
