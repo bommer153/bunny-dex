@@ -130,7 +130,7 @@ const onReply = (i: ButtonInteraction | AnySelect) => async (r: Reply): Promise<
   await i.editReply(updateWith(r));
   return (next) => i.editReply(updateWith(next));
 };
-const onUpdate = (i: ButtonInteraction) => async (r: Reply): Promise<Edit> => {
+const onUpdate = (i: ButtonInteraction | AnySelect) => async (r: Reply): Promise<Edit> => {
   if (!i.deferred && !i.replied) await i.deferUpdate();
   await i.editReply(updateWith(r));
   return (next) => i.editReply(updateWith(next));
@@ -328,6 +328,24 @@ async function handleInteraction(i: Interaction) {
           .setFooter({ text: `Card code: ${r.code} · ${r.from} → ${r.card.rarity}` });
         return animate({ embeds: [e], files: [cardFile(r.card.slug)], components: again, frames }, onUpdate(i));
       }
+      case "cmball": {
+        const rarity = arg as Rarity;
+        const opening = `🧪 *You tip your spare ${RARITY_EMOJI[rarity]} ${rarity} bunnies into the cauldron…*\n${CAULDRON_SHAKE[rarity]}`;
+        await i.update({ embeds: [info(opening)], components: [] }); // drop the button first: a long run must not start twice
+        const rs = await cards.combineAll(uid, rarity);
+        const wins = rs.flatMap((r) => (r.success ? [r] : []));
+        const left = (await cards.spareDupes(uid)).filter((c) => getCard(c.slug).rarity === rarity).length;
+        const got = wins.map((r) => `${RARITY_EMOJI[r.card.rarity]} ${r.variant !== "normal" ? r.variant + " " : ""}**${r.card.name}** \`${r.code}\``).join("\n");
+        const text = `🧪 **Combined ${rs.length}×** ${RARITY_EMOJI[rarity]} ${rarity}\n✨ **${wins.length}** upgraded · 💨 ${rs.length - wins.length} fizzled${got ? `\n\n${got}` : ""}`;
+        const clip = clipFrame(`combine-${rarity}-${wins.length ? "ok" : "fail"}`, opening);
+        const next = row(
+          ...(left >= COMBINE_COUNT ? [btn(cid("menu", `combine all ${rarity}`, uid), `🔁 ${left} spares left: again`, ButtonStyle.Primary)] : []),
+          btn(cid("menu", "col", uid), "📚 Collection"),
+          btn(cid("menu", "combine", uid), "🧪 Combine"),
+          btn(cid("menu", "menu", uid), "🏠 Menu"),
+        );
+        return animate({ embeds: [info(text)], components: [next], frames: clip ? [clip] : [] }, onUpdate(i));
+      }
       case "sell": {
         const r = await cards.npcSell(uid, arg);
         return animate({ ...txReply(`💰 Sold **${r.card.name}** for ${coins(r.coins)}.`), components: nextButtons("sell", uid) }, onUpdate(i));
@@ -401,6 +419,11 @@ async function handleInteraction(i: Interaction) {
   }
 
   if (i.isStringSelectMenu()) {
+    if (action === "go") { // menu "More" dropdown: same as a menu button
+      const [cmd, ...args] = i.values[0].split(" ");
+      await i.deferUpdate();
+      return animate(await callCommand(cmd, ctxOf(i, args)), onUpdate(i));
+    }
     if (action === "colr") {
       const r = i.values[0];
       return void (await i.update(updateWith(await renderCollection(uid, 1, r === "all" ? undefined : (r as Rarity)))));

@@ -81,6 +81,13 @@ function renderCardPanelLite(def: ReturnType<typeof getCard>, code: string): Rep
   return { embeds: [cardEmbed(def, { image: "full" }).setFooter({ text: code })], files: [cardFile(def.slug)] };
 }
 
+/** The menu's "More" dropdown: [command, emoji, label]. */
+const MORE: [string, string, string][] = [
+  ["burrow", "🕳️", "Burrow"], ["combine", "🧪", "Combine"], ["deck", "🛡️", "Deck"], ["dex", "📖", "Dex"], ["profile", "👤", "Profile"],
+  ["quests", "📜", "Quests"], ["tower", "🏰", "Tower"], ["shop", "🛒", "Shop"], ["inv", "🎒", "Inventory"], ["market", "🏪", "Market"],
+  ["auction", "🔨", "Auctions"], ["shard", "💠", "Shards"], ["lb", "🏆", "Leaderboard"], ["news", "📰", "News"], ["help", "❓", "Help"],
+];
+
 export async function renderMenu(uid: string, name: string): Promise<Reply> {
   const [en, u, b, ready] = await Promise.all([player.getEnergy(uid), player.getUser(uid), cards.burrowStatus(uid), readyQuests(uid)]);
   const m = (cmd: string, label: string, style = ButtonStyle.Secondary) => btn(cid("menu", cmd, uid), label, style);
@@ -100,11 +107,10 @@ export async function renderMenu(uid: string, name: string): Promise<Reply> {
         .setThumbnail(MASCOT_URL),
     ],
     files: [mascotFile()],
+    // Everyday actions as buttons; everything else in one dropdown, so the menu isn't a wall of 20 buttons.
     components: [
-      row(m("hunt", "🌿 Hunt"), m("work", "💼 Work"), m("daily", "📅 Daily"), m("battle", "⚔️ Battle"), m("profile", "👤 Profile")),
-      row(m("col", "📚 Collection"), m("burrow", "🕳️ Burrow"), m("combine", "🧪 Combine"), m("deck", "🛡️ Deck"), m("dex", "📖 Dex")),
-      row(m("shop", "🛒 Shop"), m("inv", "🎒 Inventory"), m("market", "🏪 Market"), m("auction", "🔨 Auctions"), m("lb", "🏆 Top")),
-      row(m("quests", "📜 Quests"), m("tower", "🏰 Tower"), m("shard", "💠 Shards"), m("news", "📰 News"), m("help", "❓ Help")),
+      row(m("hunt", "🌿 Hunt"), m("work", "💼 Work"), m("daily", "📅 Daily"), m("battle", "⚔️ Battle"), m("col", "📚 Collection")),
+      row(new StringSelectMenuBuilder().setCustomId(cid("go", "", uid)).setPlaceholder("📂 More: burrow, combine, shop, quests, tower…").addOptions(MORE.map(([value, emoji, label]) => ({ value, emoji, label })))),
       // Own action ("next"): the same command already has a button above, and Discord rejects duplicate custom_ids (error 50035).
       row(btn(cid("next", next[0], uid), `▶️ Do this next: ${next[1]}`, ButtonStyle.Success)),
     ],
@@ -462,15 +468,31 @@ const commands: Record<string, Handler> = {
     const table = RARITIES.filter((r) => nextRarity(r))
       .map((r) => `${RARITY_EMOJI[r]} ${r} → ${RARITY_EMOJI[nextRarity(r)!]} ${nextRarity(r)} · **${Math.round(COMBINE_CHANCE[r] * 100)}%**`)
       .join("\n");
-    const howTo = `🧪 **Combine** ${COMBINE_COUNT} cards of the same rarity for a chance at a random card of the next rarity.\nIf it fails you keep only the most valuable one.\n\n${table}\n\nUsage: \`${P} combine <code> <code> <code>\` or \`${P} combine auto [rarity]\``;
+    const howTo = `🧪 **Combine** ${COMBINE_COUNT} cards of the same rarity for a chance at a random card of the next rarity.\nIf it fails you keep only the most valuable one.\n\n${table}\n\nUsage: \`${P} combine <code> <code> <code>\`, \`${P} combine auto [rarity]\` or \`${P} combine all <rarity>\``;
+    const spareOf = (list: { slug: string }[], r: Rarity) => list.filter((c) => getCard(c.slug).rarity === r).length;
     if (!args.length) {
-      const mine = await availableCards(uid, UNLOCKED);
+      const [mine, spare] = await Promise.all([availableCards(uid, UNLOCKED), cards.spareDupes(uid)]);
+      const bulk = cards.BULK_RARITIES.filter((r) => spareOf(spare, r) >= COMBINE_COUNT);
       return {
-        embeds: [info(`${howTo}\n\nOr pick ${COMBINE_COUNT} cards below, or press 🤖 Auto pick (uses spare duplicates only):`)],
+        embeds: [info(`${howTo}\n\nPick ${COMBINE_COUNT} cards below, press 🤖 Auto pick for one batch, or combine **all** spare duplicates of a rarity (spares only):`)],
         components: [
           ...(mine.length >= COMBINE_COUNT ? [row(cardSelect(cid("cmbsel", "", uid), `🧪 Pick ${COMBINE_COUNT} cards of the same rarity`, mine, COMBINE_COUNT, COMBINE_COUNT))] : []),
-          row(btn(cid("menu", "combine auto", uid), "🤖 Auto pick", ButtonStyle.Primary)),
+          row(
+            btn(cid("menu", "combine auto", uid), "🤖 Auto pick", ButtonStyle.Primary),
+            ...bulk.map((r) => btn(cid("menu", `combine all ${r}`, uid), `${RARITY_EMOJI[r]} All ${r} ×${spareOf(spare, r)}`)),
+          ),
         ],
+      };
+    }
+    if (args[0].toLowerCase() === "all") {
+      const want = args[1]?.toLowerCase() as Rarity;
+      if (!cards.BULK_RARITIES.includes(want)) fail("INVALID", `Pick a rarity: ${cards.BULK_RARITIES.join(", ")}. Example: \`${P} combine all common\``);
+      const n = spareOf(await cards.spareDupes(uid), want);
+      if (n < COMBINE_COUNT) fail("INVALID", `You need ${COMBINE_COUNT} spare ${want} duplicates. Your best copy of each bunny, locked cards and your deck are never used.`);
+      const up = nextRarity(want)!;
+      return {
+        embeds: [info(`🧪 Combine all **${n}** spare ${RARITY_EMOJI[want]} **${want}** duplicates, ${COMBINE_COUNT} at a time?\nEach combine has a **${Math.round(COMBINE_CHANCE[want] * 100)}%** chance at a ${RARITY_EMOJI[up]} **${up}**. A fail keeps the best of the ${COMBINE_COUNT}, and it goes back in the pot.\n\n*Your best copy of each bunny, locked cards and your deck are never used.*`)],
+        components: [row(btn(cid("cmball", want, uid), "🧪 Combine all", ButtonStyle.Danger), btn(cid("cancel", "", uid), "Cancel"))],
       };
     }
     if (args[0].toLowerCase() === "auto") {

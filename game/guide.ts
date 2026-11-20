@@ -53,6 +53,7 @@ export const GUIDE: GuideSection[] = [
       { usage: "feed <code> carrot [qty]", desc: "Feed 🥕 carrots (or `golden-carrot`) for XP." },
       { usage: "combine [code code code]", desc: `Combine ${COMBINE_COUNT} same-rarity cards for a chance at the next rarity (${Math.round(COMBINE_CHANCE.common * 100)}% from common, down to ${Math.round(COMBINE_CHANCE.mythic * 100)}% from mythic). On failure you keep the best one. No codes shows the odds.` },
       { usage: "combine auto [rarity]", desc: `Picks ${COMBINE_COUNT} spare duplicates for you (cheapest first, lowest rarity unless you name one) and asks before combining. Your best copy of each bunny and your deck are never used.` },
+      { usage: "combine all <rarity>", desc: `Combines every spare common, uncommon, rare or epic duplicate, ${COMBINE_COUNT} at a time, after one confirm. Same safety as auto: best copies, locked cards and your deck are kept.` },
       { usage: "sell <code>", desc: `Sell a card to the shop for ${Math.round(CONFIG.npcSellRate * 100)}% of its value (asks first).` },
     ],
   },

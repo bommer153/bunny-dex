@@ -6,7 +6,7 @@ import { connectDb } from "./db";
 import { CONFIG } from "./config";
 import { User, UserCard, Auction } from "./models";
 import { buyItem, daily, ensureUser, getEnergy, hunt, huntMany, shopLimitsLeft, spendCoins, consumeItem } from "./services/player";
-import { burrowAdd, burrowCollect, combine, craftCard, feed, giftCard, grantCard, lockCard, npcSell, rerollVariant, setLocked, shardCards, spareDupes } from "./services/cards";
+import { burrowAdd, burrowCollect, combine, combineAll, craftCard, feed, giftCard, grantCard, lockCard, npcSell, rerollVariant, setLocked, shardCards, spareDupes } from "./services/cards";
 import { towerFight } from "./services/battle";
 import { bump, claimQuests } from "./services/quests";
 import { CARDS } from "./data/cards";
@@ -221,6 +221,23 @@ test("combine: success upgrades rarity, failure keeps the best card, bad input c
   await lockCard("k1", cs[2].code, "burrow");
   await assert.rejects(combine("k1", cs.map((c) => c.code)), /Not available/);
   assert.equal(await count(), n + 1); // nothing consumed
+});
+
+test("combine all: burns spare duplicates of one rarity in threes, keeps your best copy, refuses legendary", async () => {
+  await ensureUser("ca", "cara");
+  await UserCard.deleteMany({ ownerId: "ca" }); // no starter cards muddying the count
+  const grant = (n: number) => Promise.all(Array.from({ length: n }, () => grantCard("ca", "meadow-hop", "normal")));
+  const count = () => UserCard.countDocuments({ ownerId: "ca" });
+  await grant(7);
+  const fails = await combineAll("ca", "common", () => 0.999);
+  assert.equal(fails.length, 2); // 6 spares → 4 → 2, too few for a third
+  assert.equal(await count(), 3);
+  await assert.rejects(combineAll("ca", "common"), /spare common/);
+  await grant(4); // 6 spares again
+  const wins = await combineAll("ca", "common", () => 0);
+  assert.ok(wins.length === 2 && wins.every((r) => r.success));
+  assert.equal(await count(), 3); // best common + 2 new uncommons
+  await assert.rejects(combineAll("ca", "legendary"), /Combine all works/);
 });
 
 test("multi-hunt: ×5 spends 5 energy for 5 cards; ×10 without enough energy changes nothing; pity carries across rolls", async () => {

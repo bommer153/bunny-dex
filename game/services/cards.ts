@@ -2,7 +2,7 @@ import { CARDS, RARITIES, ELEMENTS, getCard, type Rarity } from "../data/cards";
 import { CARROT_XP, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, REROLL_COST, SHARD_YIELD, craftCost } from "../config";
 import { fail } from "../errors";
 import { User, UserCard, type CardStatus } from "../models";
-import { applyCardXp, burrowEarnings, burrowSlots, cardValue, completedSets, rollVariant, spareCards, feedXp, makeCode, nextRarity, rollCombine, setTitle, type Rng } from "../rules";
+import { applyCardXp, autoPick, burrowEarnings, burrowSlots, cardValue, completedSets, rollVariant, spareCards, feedXp, makeCode, nextRarity, rollCombine, setTitle, type Rng } from "../rules";
 import { bump } from "./quests";
 
 /** Cards that can be used up or given away: not busy elsewhere and not 🔒 locked by the player. */
@@ -186,6 +186,31 @@ export async function combine(ownerId: string, codes: string[], rng: Rng = Math.
   return { success: false as const, from: rarity, chance, kept: best.code, keptCard: getCard(best.slug) };
 }
 
+/** Rarities "combine all" may burn in bulk; legendary and up stay hand-picked. */
+export const BULK_RARITIES: Rarity[] = ["common", "uncommon", "rare", "epic"];
+
+/**
+ * Combines spare duplicates of one rarity, COMBINE_COUNT at a time, until fewer are left.
+ * Same safety as auto combine: your best copy of each bunny, locked cards and your deck are never used.
+ */
+// shortcut: stops after `limit` combines so one press stays a few seconds; press again for the rest.
+export async function combineAll(ownerId: string, rarity: Rarity, rng: Rng = Math.random, limit = 30) {
+  if (!BULK_RARITIES.includes(rarity)) fail("INVALID", `Combine all works for ${BULK_RARITIES.join(", ")}.`);
+  const results: Awaited<ReturnType<typeof combine>>[] = [];
+  while (results.length < limit) {
+    const picks = autoPick(await freeCards(ownerId), rarity); // re-read: a failed combine leaves one card behind
+    if (!picks) break;
+    try {
+      results.push(await combine(ownerId, picks.map((c) => c.code), rng));
+    } catch (e) {
+      if (!results.length) throw e;
+      break; // a card changed mid-run (sold, traded): keep what's done
+    }
+  }
+  if (!results.length) fail("INVALID", `You need ${COMBINE_COUNT} spare ${rarity} duplicates. Your best copy of each bunny, locked cards and your deck are never used.`);
+  return results;
+}
+
 // ---- Burrow (idle farm) ----
 
 export async function burrowStatus(ownerId: string, now = new Date()) {
@@ -275,10 +300,14 @@ export async function claimSets(ownerId: string) {
 // ---- Shards, crafting, gifts, re-rolls ----
 
 /** Cards that `shard dupes` would break: spare duplicates (your best copy of each bunny stays), not locked, not in the deck. */
-export async function spareDupes(ownerId: string) {
+/** Available, unlocked cards outside the battle deck. */
+async function freeCards(ownerId: string) {
   const user = await User.findOne({ discordId: ownerId }, { deck: 1 });
-  const mine = await UserCard.find({ ownerId, ...FREE, code: { $nin: user?.deck ?? [] } }).lean();
-  return spareCards(mine);
+  return UserCard.find({ ownerId, ...FREE, code: { $nin: user?.deck ?? [] } }).lean();
+}
+
+export async function spareDupes(ownerId: string) {
+  return spareCards(await freeCards(ownerId));
 }
 
 /** Breaks cards into shards. Cards that changed meanwhile are skipped, never double-counted. */
