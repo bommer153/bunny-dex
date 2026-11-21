@@ -19,7 +19,8 @@ import {
   UNLOCKED, availableCards, errorButtons, hooks, readyQuests, withStatus, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderShop, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
-import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, loadMoods, mention, mood, row, warmCards } from "./ui";
+import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, loadMoods, mention, mood, row } from "./ui";
+import { warmCards } from "./grid";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
 import { nextMinBid } from "../game/rules";
@@ -538,7 +539,7 @@ client.once(Events.ClientReady, (c) => {
   void c.application.emojis.fetch().then((list) => loadMoods(list.values())).catch((e) => console.error("app emojis:", e));
   // Effect clips build in the background; until then replies just go out without them.
   void warmFx().then((r) => console.log(`fx: ${r.count} clips ready in ${r.ms}ms`));
-  void warmCards().catch((e) => console.error("card frames failed (plain art is sent instead)", e));
+  void warmCards().then((r) => console.log(`cards: ${r.count} pictures ready in ${r.ms}ms`), (e) => console.error("card pictures failed (plain art is sent instead)", e));
   setInterval(tick, 15_000);
   void tick();
 });

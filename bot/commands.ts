@@ -15,7 +15,7 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import { fx } from "./fx";
-import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardLine, cid, coins, embed, info, mention, mood, row } from "./ui";
+import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardImage, cardLine, cid, coins, embed, info, mention, mood, row } from "./ui";
 
 /** `frames` are shown first, one after another, by editing the message (a simple Discord "animation"). */
 /** `frames` play first (message edits). `ms` = how long this frame stays up (default 900ms). */
@@ -381,7 +381,7 @@ const commands: Record<string, Handler> = {
       if (target === uid) e.setFooter({ text: `Show off a card here: ${P} showcase <code>` });
       return { embeds: [e] };
     }
-    e.addFields({ name: "🌟 Showcase", value: cardLine(show) }).setImage(`attachment://${show.slug}.png`).setColor(RARITY_COLOR[getCard(show.slug).rarity]);
+    e.addFields({ name: "🌟 Showcase", value: cardLine(show) }).setImage(cardImage(show.slug)).setColor(RARITY_COLOR[getCard(show.slug).rarity]);
     return { embeds: [e], files: [cardFile(show.slug)] };
   },
 

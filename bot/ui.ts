@@ -30,8 +30,7 @@ export function embed() {
   const who = viewer.getStore();
   return who ? e.setAuthor(who) : e;
 }
-import sharp from "sharp";
-import { CARDS, getCard, type CardDef, type Rarity } from "../game/data/cards";
+import { getCard, type CardDef, type Rarity } from "../game/data/cards";
 import { RARITY_EMOJI, TRAITS, variantInfo } from "../game/config";
 import { cardStats } from "../game/rules";
 
@@ -63,19 +62,13 @@ export function cardLine(c: { code: string; slug: string; variant: string; level
 export const MASCOT_URL = "attachment://mascot.png";
 export const mascotFile = () => new AttachmentBuilder(path.join(process.cwd(), "public", "brand", "mascot.png"), { name: "mascot.png" });
 
-const ART_DIR = path.join(process.cwd(), "public", "cards");
-const framed = new Map<string, Buffer>(); // card art in its rarity-colored border, filled by warmCards
-
-/** Renders every card's art at 512 px inside a rarity-colored border (~20 MB, a few seconds). Until it's done cardFile sends the plain art. */
-export async function warmCards() {
-  const S = 512, B = 14, seam = Buffer.from(`<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg"><rect x="${B - 1.5}" y="${B - 1.5}" width="${S - 2 * B + 3}" height="${S - 2 * B + 3}" fill="none" stroke="#140a22" stroke-width="3"/></svg>`);
-  for (const c of CARDS) {
-    const color = `#${RARITY_COLOR[c.rarity].toString(16).padStart(6, "0")}`;
-    framed.set(c.slug, await sharp(path.join(ART_DIR, `${c.slug}.png`)).resize(S - 2 * B).extend({ top: B, bottom: B, left: B, right: B, background: color }).composite([{ input: seam }]).png().toBuffer());
-  }
-}
-
-export const cardFile = (slug: string) => new AttachmentBuilder(framed.get(slug) ?? path.join(ART_DIR, `${slug}.png`), { name: `${slug}.png` });
+/** Card pictures (framed art with rarity effects; GIF for legendary+), drawn at startup by warmCards in grid.ts. Until then the plain art is sent. */
+export const cardPics = new Map<string, { name: string; data: Buffer }>();
+const cardPicName = (slug: string) => cardPics.get(slug)?.name ?? `${slug}.png`;
+/** The embed URL for cardFile(slug): build both in the same reply so the name (.png or .gif) matches. */
+export const cardImage = (slug: string) => `attachment://${cardPicName(slug)}`;
+export const cardFile = (slug: string) =>
+  new AttachmentBuilder(cardPics.get(slug)?.data ?? path.join(process.cwd(), "public", "cards", `${slug}.png`), { name: cardPicName(slug) });
 
 export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number; title?: string; image?: "thumb" | "full" } = {}) {
   const level = opts.level ?? 1;
@@ -93,8 +86,8 @@ export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number
       { name: "Trait", value: `${TRAITS[def.element].name}: ${TRAITS[def.element].desc}`, inline: true },
     );
   if (def.abilities?.length) e.addFields({ name: "Ability", value: def.abilities.map((a) => `**${a.name}**: ${a.description}`).join("\n") });
-  if (opts.image === "full") e.setImage(`attachment://${def.slug}.png`);
-  else e.setThumbnail(`attachment://${def.slug}.png`);
+  if (opts.image === "full") e.setImage(cardImage(def.slug));
+  else e.setThumbnail(cardImage(def.slug));
   return e;
 }
 

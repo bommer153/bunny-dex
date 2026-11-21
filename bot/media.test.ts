@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { fx, warmFx, fxNames } from "./fx";
 import { tryMedia, withoutMedia } from "./media";
 import { battleReply, clipFrame, renderHelp, txReply, type Reply } from "./commands";
-import { cardFile, info, warmCards } from "./ui";
+import { cardEmbed, cardFile, info } from "./ui";
 import sharp from "sharp";
-import { collectionGrid } from "./grid";
+import { collectionGrid, warmCards } from "./grid";
 import { CARDS, type Rarity } from "../game/data/cards";
 
 before(async () => { await warmFx(); });
@@ -67,13 +67,17 @@ test("help uses the mascot thumbnail and stays complete without media", () => {
   assert.match(plain.description, /auction start/);
 });
 
-test("card art is sent inside a border in its rarity color", async () => {
+test("card pictures: framed in the rarity color, legendary+ animated, embed URL matches the file", async () => {
   await warmCards();
-  const card = CARDS.find((c) => c.rarity === "uncommon")!;
-  const png = cardFile(card.slug).attachment as Buffer;
-  const { data, info: m } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
-  assert.equal(m.width, 512);
-  assert.deepEqual([...data.subarray(0, 3)], [0x22, 0xc5, 0x5e]); // top-left pixel = uncommon green
+  const of = (r: Rarity) => CARDS.find((c) => c.rarity === r)!;
+  const still = cardFile(of("uncommon").slug);
+  const { data, info: m } = await sharp(still.attachment as Buffer).raw().toBuffer({ resolveWithObject: true });
+  const px = (x: number, y: number) => [...data.subarray((y * m.width + x) * m.channels, (y * m.width + x) * m.channels + 3)];
+  assert.deepEqual(px(57, 275), [0x22, 0xc5, 0x5e]); // left edge of the frame = uncommon green
+  const legend = of("legendary");
+  assert.equal(cardFile(legend.slug).name, `${legend.slug}.gif`);
+  assert.equal((cardFile(legend.slug).attachment as Buffer).subarray(0, 6).toString(), "GIF89a");
+  assert.equal(cardEmbed(legend, { image: "full" }).toJSON().image?.url, `attachment://${legend.slug}.gif`);
 });
 
 test("collection grid: a page with a legendary+ card loops as a GIF, other pages stay a PNG", async () => {
