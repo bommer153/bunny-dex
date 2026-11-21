@@ -4,6 +4,9 @@ import { AttachmentBuilder } from "discord.js";
 import { CARDS, RARITIES, getCard, type Rarity } from "../game/data/cards";
 import { RARITY_COLOR, cardPics } from "./ui";
 
+// The server has no fonts installed (badge text came out as □ boxes): use the bot's own. Set before the first text is drawn.
+process.env.FONTCONFIG_FILE ??= path.join(process.cwd(), "bot", "fonts", "fonts.conf");
+
 const TILE = 180;
 const PAD = 20; // room for the rarity glow between tiles
 const COLS = 5;
@@ -74,7 +77,7 @@ function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
     // Badge last so sparkles never cover it; a chip is sized to its text (approx. bold 15 px sans).
     const bw = c.chip ? Math.round(c.chip.length * 8.6 + 16) : 54;
     over += `<rect x="${x + TILE - 8 - bw}" y="${y + TILE - 34}" width="${bw}" height="26" rx="8" fill="#1e1030" stroke="${stroke}" stroke-width="2"/>
-      <text x="${x + TILE - 8 - bw / 2}" y="${y + TILE - 15}" font-family="sans-serif" font-size="15" font-weight="bold" fill="${c.chip ? stroke : "#fff"}" text-anchor="middle">${c.chip ?? `Lv ${c.level}`}</text>`;
+      <text x="${x + TILE - 8 - bw / 2}" y="${y + TILE - 15}" font-family="Geist, sans-serif" font-size="15" font-weight="bold" fill="${c.chip ? stroke : "#fff"}" text-anchor="middle">${c.chip ?? `Lv ${c.level}`}</text>`;
   });
   const svg = (body: string) => Buffer.from(`<svg width="${Math.round(W * scale)}" height="${Math.round(H * scale)}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`);
   return { under: svg(under), over: svg(over) };
