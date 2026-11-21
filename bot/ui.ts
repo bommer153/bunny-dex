@@ -30,7 +30,8 @@ export function embed() {
   const who = viewer.getStore();
   return who ? e.setAuthor(who) : e;
 }
-import { getCard, type CardDef, type Rarity } from "../game/data/cards";
+import sharp from "sharp";
+import { CARDS, getCard, type CardDef, type Rarity } from "../game/data/cards";
 import { RARITY_EMOJI, TRAITS, variantInfo } from "../game/config";
 import { cardStats } from "../game/rules";
 
@@ -62,7 +63,19 @@ export function cardLine(c: { code: string; slug: string; variant: string; level
 export const MASCOT_URL = "attachment://mascot.png";
 export const mascotFile = () => new AttachmentBuilder(path.join(process.cwd(), "public", "brand", "mascot.png"), { name: "mascot.png" });
 
-export const cardFile = (slug: string) => new AttachmentBuilder(path.join(process.cwd(), "public", "cards", `${slug}.png`), { name: `${slug}.png` });
+const ART_DIR = path.join(process.cwd(), "public", "cards");
+const framed = new Map<string, Buffer>(); // card art in its rarity-colored border, filled by warmCards
+
+/** Renders every card's art at 512 px inside a rarity-colored border (~20 MB, a few seconds). Until it's done cardFile sends the plain art. */
+export async function warmCards() {
+  const S = 512, B = 14, seam = Buffer.from(`<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg"><rect x="${B - 1.5}" y="${B - 1.5}" width="${S - 2 * B + 3}" height="${S - 2 * B + 3}" fill="none" stroke="#140a22" stroke-width="3"/></svg>`);
+  for (const c of CARDS) {
+    const color = `#${RARITY_COLOR[c.rarity].toString(16).padStart(6, "0")}`;
+    framed.set(c.slug, await sharp(path.join(ART_DIR, `${c.slug}.png`)).resize(S - 2 * B).extend({ top: B, bottom: B, left: B, right: B, background: color }).composite([{ input: seam }]).png().toBuffer());
+  }
+}
+
+export const cardFile = (slug: string) => new AttachmentBuilder(framed.get(slug) ?? path.join(ART_DIR, `${slug}.png`), { name: `${slug}.png` });
 
 export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number; title?: string; image?: "thumb" | "full" } = {}) {
   const level = opts.level ?? 1;

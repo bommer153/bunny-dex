@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { fx, warmFx, fxNames } from "./fx";
 import { tryMedia, withoutMedia } from "./media";
 import { battleReply, clipFrame, renderHelp, txReply, type Reply } from "./commands";
-import { info } from "./ui";
+import { cardFile, info, warmCards } from "./ui";
 import sharp from "sharp";
 import { collectionGrid } from "./grid";
 import { CARDS, type Rarity } from "../game/data/cards";
@@ -65,6 +65,15 @@ test("help uses the mascot thumbnail and stays complete without media", () => {
   const plain = withoutMedia(r).embeds![0] as { description: string; thumbnail?: unknown };
   assert.equal(plain.thumbnail, undefined);
   assert.match(plain.description, /auction start/);
+});
+
+test("card art is sent inside a border in its rarity color", async () => {
+  await warmCards();
+  const card = CARDS.find((c) => c.rarity === "uncommon")!;
+  const png = cardFile(card.slug).attachment as Buffer;
+  const { data, info: m } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+  assert.equal(m.width, 512);
+  assert.deepEqual([...data.subarray(0, 3)], [0x22, 0xc5, 0x5e]); // top-left pixel = uncommon green
 });
 
 test("collection grid: a page with a legendary+ card loops as a GIF, other pages stay a PNG", async () => {
