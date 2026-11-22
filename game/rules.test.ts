@@ -6,6 +6,7 @@ import {
   antiSnipe, applyCardXp, burrowEarnings, cardStats, energyNow, energyWaitMs, isRarePlus, makeCode, maxEnergy, msUntilShopReset, nextMinBid, parseDuration, shopDay,
   autoPick, nextRarity, playerLevel, resolveBattle, spareCards, rollCombine, rollHunt, rollRarity, xpToNextPlayerLevel,
   completedSets, dailyQuests, nextStreak, setTitle, streakCoins, streakDay, weekKey, huntXp, lanePower, teamBonus, towerReward, towerTeam,
+  achievementStats, dueAchievements,
 } from "./rules";
 
 /** Deterministic RNG (mulberry32). */
@@ -224,4 +225,20 @@ test("hunt XP halves after the daily cap; tower floors get harder", () => {
   assert.equal(towerTeam(3).length, CONFIG.teamSize);
   assert.equal(towerReward(5).shards, 10);
   assert.equal(towerReward(4).shards, 0);
+});
+
+test("achievements: stats come from the player and their bunny + variant pairs; each is due once", () => {
+  const legendary = CARDS.find((c) => c.rarity === "legendary")!.slug;
+  const pairs = [{ slug: "meadow-hop", variant: "normal" }, { slug: "meadow-hop", variant: "foil" }, { slug: legendary, variant: "golden" }];
+  const s = achievementStats({ level: 10, streak: 7, towerFloor: 3, stats: { hunts: 12, battlesWon: 0 } }, pairs);
+  assert.deepEqual(
+    { dex: s.dex, variants: s.variants, kinds: s.variantKinds, rarest: s.rarest, hunts: s.hunts, sets: s.sets },
+    { dex: 2, variants: 2, kinds: 2, rarest: RARITIES.indexOf("legendary"), hunts: 12, sets: 0 },
+  );
+  const due = dueAchievements(s, []).map((a) => a.id);
+  for (const id of ["hunt10", "epic", "legendary", "variant1", "streak7", "level10"]) assert.ok(due.includes(id), id);
+  for (const id of ["hunt100", "mythic", "tower10", "win10"]) assert.ok(!due.includes(id), id);
+  assert.ok(!dueAchievements(s, ["hunt10"]).some((a) => a.id === "hunt10"), "already paid");
+  // Missing fields (older players) count as zero rather than failing.
+  assert.equal(achievementStats({ level: 1 }, []).hunts, 0);
 });

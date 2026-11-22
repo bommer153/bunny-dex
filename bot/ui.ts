@@ -33,7 +33,7 @@ export function embed() {
   return who ? e.setAuthor(who) : e;
 }
 import { getCard, type CardDef, type Rarity } from "../game/data/cards";
-import { RARITY_EMOJI, TRAITS, variantInfo } from "../game/config";
+import { RARITY_EMOJI, TRAITS, variantTag } from "../game/config";
 import { cardStats } from "../game/rules";
 
 export const RARITY_COLOR: Record<Rarity, number> = {
@@ -54,7 +54,7 @@ export const mention = (id: string) => `<@${id}>`;
 /** One-line card summary: `k3x9qa` 🔵 Foil Tide Tuft · Lv 3 */
 export function cardLine(c: { code: string; slug: string; variant: string; level: number; status?: string; locked?: boolean | null }) {
   const def = getCard(c.slug);
-  const v = c.variant !== "normal" ? `${variantInfo(c.variant).name} ` : "";
+  const v = variantTag(c.variant);
   const status = c.status && c.status !== "available" ? ` · *${c.status}*` : "";
   return `\`${c.code}\` ${rarityBadge(def.rarity)} ${v}**${def.name}** · Lv ${c.level}${status}${c.locked ? " 🔒" : ""}`;
 }
@@ -66,16 +66,19 @@ export const mascotFile = () => new AttachmentBuilder(path.join(process.cwd(), "
 
 /** Card pictures (framed art with rarity effects; GIF for legendary+), drawn at startup by warmCards in grid.ts. Until then the plain art is sent. */
 export const cardPics = new Map<string, { name: string; data: Buffer }>();
-const cardPicName = (slug: string) => cardPics.get(slug)?.name ?? `${slug}.png`;
-/** The embed URL for cardFile(slug): build both in the same reply so the name (.png or .gif) matches. */
-export const cardImage = (slug: string) => `attachment://${cardPicName(slug)}`;
-export const cardFile = (slug: string) =>
-  new AttachmentBuilder(cardPics.get(slug)?.data ?? path.join(process.cwd(), "public", "cards", `${slug}.png`), { name: cardPicName(slug) });
+/** cardPics key: the slug for normal cards, `slug.variant` otherwise. Variant pictures are drawn on demand (drawCard in grid.ts). */
+export const picKey = (slug: string, variant = "normal") => (variant === "normal" ? slug : `${slug}.${variant}`);
+const pic = (slug: string, variant?: string) => cardPics.get(picKey(slug, variant)) ?? cardPics.get(slug); // not drawn yet: the normal picture
+const cardPicName = (slug: string, variant?: string) => pic(slug, variant)?.name ?? `${slug}.png`;
+/** The embed URL for cardFile(slug, variant): build both in the same reply so the name (.png or .gif) matches. */
+export const cardImage = (slug: string, variant?: string) => `attachment://${cardPicName(slug, variant)}`;
+export const cardFile = (slug: string, variant?: string) =>
+  new AttachmentBuilder(pic(slug, variant)?.data ?? path.join(process.cwd(), "public", "cards", `${slug}.png`), { name: cardPicName(slug, variant) });
 
 export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number; title?: string; image?: "thumb" | "full" } = {}) {
   const level = opts.level ?? 1;
   const s = cardStats(def, level);
-  const v = opts.variant && opts.variant !== "normal" ? `${variantInfo(opts.variant).name} ` : "";
+  const v = variantTag(opts.variant ?? "normal");
   const e = embed()
     .setColor(RARITY_COLOR[def.rarity])
     .setTitle(opts.title ?? `${RARITY_EMOJI[def.rarity]} ${v}${def.name}`)
@@ -88,8 +91,8 @@ export function cardEmbed(def: CardDef, opts: { variant?: string; level?: number
       { name: "Trait", value: `${TRAITS[def.element].name}: ${TRAITS[def.element].desc}`, inline: true },
     );
   if (def.abilities?.length) e.addFields({ name: "Ability", value: def.abilities.map((a) => `**${a.name}**: ${a.description}`).join("\n") });
-  if (opts.image === "full") e.setImage(cardImage(def.slug));
-  else e.setThumbnail(cardImage(def.slug));
+  if (opts.image === "full") e.setImage(cardImage(def.slug, opts.variant));
+  else e.setThumbnail(cardImage(def.slug, opts.variant));
   return e;
 }
 

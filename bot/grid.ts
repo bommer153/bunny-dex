@@ -3,8 +3,8 @@ import path from "node:path";
 import sharp from "sharp";
 import { AttachmentBuilder } from "discord.js";
 import { CARDS, RARITIES, getCard, type CardDef, type Element, type Rarity } from "../game/data/cards";
-import { TRAITS } from "../game/config";
-import { RARITY_COLOR, cardPics } from "./ui";
+import { TRAITS, variantInfo } from "../game/config";
+import { RARITY_COLOR, cardPics, picKey } from "./ui";
 
 // The server has no fonts installed (badge text came out as □ boxes): use the bot's own. Set before the first text is drawn.
 process.env.FONTCONFIG_FILE ??= path.join(process.cwd(), "bot", "fonts", "fonts.conf");
@@ -33,7 +33,7 @@ async function thumb(slug: string, w: number, h: number) {
  * A card on the page: a square tile with its level in the corner, or with `card` set (card pictures) a portrait
  * trading card: name + element icon, art window with a round rarity badge, info strip, trait/ability/flavor text, stats.
  */
-type Tile = { slug: string; level?: number; card?: boolean };
+type Tile = { slug: string; level?: number; card?: boolean; variant?: string };
 const CARD_H = 252; // portrait tile height (5:7 like a trading card)
 /** Where a tile's art goes (tile units): the square grid art, or the trading card's landscape window. */
 const artBox = (c: Tile, i: number) => {
@@ -107,11 +107,45 @@ const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i])) as Record<Rarity, number>;
 const at = (i: number) => [PAD + (i % COLS) * (TILE + PAD), PAD + Math.floor(i / COLS) * (TILE + PAD)] as const;
 
+const HOLO = ["#f87171", "#facc15", "#4ade80", "#22d3ee", "#818cf8", "#f0abfc", "#f87171"].map((c, k, a) => `<stop offset="${k / (a.length - 1)}" stop-color="${c}"/>`).join("");
 const DEFS = `<filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter>
   <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".4" stop-color="#fff" stop-opacity=".06"/><stop offset=".41" stop-color="#fff" stop-opacity="0"/></linearGradient>
   <linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".7"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-  <radialGradient id="spark"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
-const HOLO = ["#f87171", "#facc15", "#4ade80", "#22d3ee", "#818cf8", "#f0abfc", "#f87171"].map((c, k, a) => `<stop offset="${k / (a.length - 1)}" stop-color="${c}"/>`).join("");
+  <radialGradient id="spark"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="holo" x1="0" y1="0" x2="1" y2="1">${HOLO}</linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset=".5" stop-color="#d97706"/><stop offset="1" stop-color="#fde68a"/></linearGradient>
+  <linearGradient id="velvet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#3b0764"/></linearGradient>
+  <radialGradient id="vig"><stop offset=".45" stop-color="#0b0118" stop-opacity="0"/><stop offset="1" stop-color="#0b0118" stop-opacity=".85"/></radialGradient>`;
+
+/** Variant looks: a tint over the art, a layer on the card body (card pictures only) and the color of the variant's chip. */
+type Box = { x: number; y: number; w: number; h: number };
+const box = (b: Box, attrs: string, rx = 0) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${rx}" ${attrs}/>`;
+const STARS = Array.from({ length: 30 }, (_, k) => [((k * 37) % 160) + 4, ((k * 61) % 232) + 4, k % 3 ? 0.6 : 1.2]); // fixed starfield, body units
+const VARIANT_LOOK: Record<string, { color: string; art?: (a: Box) => string; body?: (b: Box) => string }> = {
+  foil: { color: "#7dd3fc", art: (a) => box(a, `fill="url(#holo)" opacity=".28"`) },
+  golden: { color: "#fbbf24", art: (a) => box(a, `fill="#f59e0b" opacity=".22"`), body: (b) => box(b, `fill="url(#gold)" opacity=".4"`, 10) },
+  shadow: { color: "#c084fc", art: (a) => box(a, `fill="url(#vig)"`), body: (b) => box(b, `fill="#05010d" opacity=".5"`, 10) },
+  crystal: {
+    color: "#a5f3fc",
+    art: (a) => `${box(a, `fill="#cffafe" opacity=".22"`)}<path d="M${a.x} ${a.y}H${a.x + a.w * 0.45}L${a.x} ${a.y + a.h * 0.5}ZM${a.x + a.w} ${a.y + a.h}H${a.x + a.w * 0.5}L${a.x + a.w} ${a.y + a.h * 0.35}Z" fill="#fff" opacity=".35"/>`,
+    body: (b) => box(b, `fill="#a5f3fc" opacity=".3"`, 10),
+  },
+  rainbow: { color: "url(#holo)", art: (a) => box(a, `fill="url(#holo)" opacity=".16"`), body: (b) => box(b, `fill="url(#holo)" opacity=".32"`, 10) },
+  celestial: {
+    color: "#c4b5fd",
+    art: (a) => box(a, `fill="#6366f1" opacity=".14"`),
+    body: (b) => box(b, `fill="#1e1b4b" opacity=".5"`, 10) + STARS.map(([sx, sy, r]) => `<circle cx="${b.x + sx}" cy="${b.y + sy}" r="${r}" fill="#fff" opacity=".75"/>`).join(""),
+  },
+  royal: { color: "#f0b12a", body: (b) => box(b, `fill="url(#velvet)" opacity=".55"`, 10) + box({ x: b.x + 3, y: b.y + 3, w: b.w - 6, h: b.h - 6 }, `fill="none" stroke="#f0b12a" stroke-width="1.2"`, 8) },
+};
+/** The variant's name on a chip in the art's top-left corner (bigger on the small grid tiles). */
+function variantChip(code: string, a: Box, k: number) {
+  const look = VARIANT_LOOK[code];
+  if (!look) return "";
+  const name = variantInfo(code).name.toUpperCase(), w = (name.length * 5.4 + 10) * k, h = 11 * k;
+  return `<rect x="${a.x + 4}" y="${a.y + 4}" width="${w}" height="${h}" rx="${h / 2}" fill="#1e1030" fill-opacity=".85" stroke="${look.color}" stroke-width="${0.9 * k}"/>
+    <text x="${a.x + 4 + w / 2}" y="${a.y + 4 + h * 0.74}" ${T} font-size="${7 * k}" font-weight="bold" letter-spacing="${0.5 * k}" fill="${look.color}" text-anchor="middle">${name}</text>`;
+}
 const SPARKS = [[14, 16], [164, 26], [6, 104], [96, 5], [174, 80], [22, 170], [84, 176]]; // spots on the frame (tile coords), clear of the level badge
 const star = (cx: number, cy: number, r: number, k = r * 0.22) =>
   `M${cx} ${cy - r}L${cx + k} ${cy - k}L${cx + r} ${cy}L${cx + k} ${cy + k}L${cx} ${cy + r}L${cx - k} ${cy + k}L${cx - r} ${cy}L${cx - k} ${cy - k}Z`;
@@ -134,7 +168,9 @@ function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
     }
     if (rank >= RANK.rare) under += `<rect x="${x + 4}" y="${y + 4}" width="${TILE - 8}" height="${th - 8}" rx="14" fill="none" stroke="${stroke}" stroke-width="${rank * 3 + wave * 8}" opacity="${0.3 + rank * 0.08 + wave * 0.2}" filter="url(#blur)"/>`;
     const face = c.card ? cardFace(def, x, y, a, stroke, rarity) : null;
-    if (face) under += face.under;
+    const look = c.variant ? VARIANT_LOOK[c.variant] : undefined;
+    if (face) under += face.under + (look?.body?.({ x: x + 6, y: y + 6, w: TILE - 12, h: th - 12 }) ?? "");
+    if (look?.art) over += look.art(a);
     if (rank >= RANK.epic) {
       // Glass: a gloss over the art and a bright inner edge; legendary+ also gets a light sweep across it.
       const sweep = a.x - 90 + p * 1.8 * (a.w + 140);
@@ -147,6 +183,7 @@ function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
       over += `${face.over}<rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${th - 12}" rx="10" fill="url(#glass)" opacity=".55"/>
         <rect x="${x + 7.5}" y="${y + 7.5}" width="${TILE - 15}" height="${th - 15}" rx="9" fill="none" stroke="#fff" stroke-opacity=".3"/>`;
     }
+    if (c.variant) over += variantChip(c.variant, a, c.card ? 1 : 1.7);
     // Grid tiles: a thick frame. Card pictures: a thin ring like the web's card tiles (ring-2, rounded-xl).
     over += c.card
       ? `<rect x="${x + 5}" y="${y + 5}" width="${TILE - 10}" height="${th - 10}" rx="11" fill="none" stroke="${stroke}" stroke-width="2"/>`
@@ -208,12 +245,35 @@ export async function collectionGrid(list: Tile[]): Promise<AttachmentBuilder | 
   }
 }
 
-/** Draws every card's embed picture once (a portrait trading card with its rarity effects) into cardPics. */
+const drawing = new Map<string, Promise<void>>(); // pictures being drawn right now, so two requests share one render
+const variantPics: string[] = []; // drawn variant pictures, oldest first
+
+/**
+ * Makes sure the card picture (a portrait trading card with its rarity and variant effects) is in cardPics. Normal ones
+ * are drawn at startup; a variant is drawn the first time it's shown (~0.1 s, ~1 s for an animated one). Never throws:
+ * on failure cardFile falls back to the normal picture.
+ */
+export function drawCard(slug: string, variant = "normal"): Promise<void> {
+  const key = picKey(slug, variant);
+  if (cardPics.has(key)) return Promise.resolve();
+  let p = drawing.get(key);
+  if (!p) {
+    p = render([{ slug, card: true, variant }], TILE + 2 * PAD, CARD_H + 2 * PAD, CARD_SCALE)
+      .then(({ ext, data }) => {
+        cardPics.set(key, { name: `${key}.${ext}`, data });
+        // shortcut: keeps the 60 newest variant pictures (~25 MB); raise it if players keep waiting on redraws.
+        if (variant !== "normal" && variantPics.push(key) > 60) cardPics.delete(variantPics.shift()!);
+      })
+      .catch((e) => console.error("card picture failed", key, e))
+      .finally(() => drawing.delete(key));
+    drawing.set(key, p);
+  }
+  return p;
+}
+
+/** Draws every card's normal picture once, at startup. */
 export async function warmCards() {
   const start = Date.now();
-  for (const c of CARDS) {
-    const { ext, data } = await render([{ slug: c.slug, card: true }], TILE + 2 * PAD, CARD_H + 2 * PAD, CARD_SCALE);
-    cardPics.set(c.slug, { name: `${c.slug}.${ext}`, data });
-  }
+  for (const c of CARDS) await drawCard(c.slug);
   return { count: cardPics.size, ms: Date.now() - start };
 }

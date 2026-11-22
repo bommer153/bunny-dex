@@ -5,7 +5,7 @@ import { tryMedia, withoutMedia } from "./media";
 import { battleReply, clipFrame, renderHelp, txReply, type Reply } from "./commands";
 import { cardEmbed, cardFile, info } from "./ui";
 import sharp from "sharp";
-import { collectionGrid, warmCards } from "./grid";
+import { collectionGrid, drawCard, warmCards } from "./grid";
 import { CARDS, RARITIES, type Rarity } from "../game/data/cards";
 
 before(async () => { await warmFx(); });
@@ -78,6 +78,15 @@ test("card pictures: framed in the rarity color, legendary+ animated, embed URL 
   assert.equal(cardFile(legend.slug).name, `${legend.slug}.gif`);
   assert.equal((cardFile(legend.slug).attachment as Buffer).subarray(0, 6).toString(), "GIF89a");
   assert.equal(cardEmbed(legend, { image: "full" }).toJSON().image?.url, `attachment://${legend.slug}.gif`);
+});
+
+test("variant card pictures are drawn on demand and the embed points at them", async () => {
+  const def = CARDS.find((c) => c.rarity === "common")!;
+  assert.equal(cardFile(def.slug, "royal").name, `${def.slug}.png`, "not drawn yet: the normal picture");
+  await Promise.all([drawCard(def.slug, "royal"), drawCard(def.slug, "royal")]); // concurrent requests share one render
+  assert.equal(cardFile(def.slug, "royal").name, `${def.slug}.royal.png`);
+  assert.equal(cardEmbed(def, { variant: "royal", image: "full" }).toJSON().image?.url, `attachment://${def.slug}.royal.png`);
+  assert.match(cardEmbed(def, { variant: "royal" }).toJSON().title!, /👑 Royal/);
 });
 
 test("rarity badge emojis: one per rarity, 128 px, transparent around the gem", async () => {

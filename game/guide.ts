@@ -1,5 +1,5 @@
 // Command guide shared by `bd help` (bot) and /guide (web), so both stay in sync.
-import { COMBINE_CHANCE, COMBINE_COUNT, CONFIG, RARITY_WEIGHT, SHARD_YIELD, TRAITS } from "./config";
+import { ACHIEVEMENTS, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, RARITY_WEIGHT, SHARD_YIELD, SPECIAL_VARIANTS, TRAITS } from "./config";
 
 const total = Object.values(RARITY_WEIGHT).reduce((a, b) => a + b, 0);
 /** Published hunt odds, e.g. "common 67.9% · uncommon 25% · …" (players trust games that show their rates). */
@@ -40,7 +40,8 @@ export const GUIDE: GuideSection[] = [
     intro: "Every card has a 6-letter code (shown in your collection). Level cards by feeding them duplicates or carrots.",
     commands: [
       { usage: "col [rarity] [page]", desc: "Your collection, with rarity filter and pages.", aliases: ["c", "collection"] },
-      { usage: "dex", desc: `Dex progress, missing bunnies and element sets. Owning every card of an element earns a title + ${CONFIG.setRewardCoins} coins.` },
+      { usage: "dex", desc: `Dex progress, missing bunnies, the Variant Dex (each bunny in each special variant: ${SPECIAL_VARIANTS.map((v) => `${v.emoji} ${v.name}`).join(", ")}) and element sets. Owning every card of an element earns a title + ${CONFIG.setRewardCoins} coins.` },
+      { usage: "achievements", desc: `${ACHIEVEMENTS.length} one-time goals (hunts, Dex, variants, battles, tower, streaks…). Each pays coins the moment you reach it.`, aliases: ["ach", "badges"] },
       { usage: "lock <code>", desc: "🔒 Protect a card: it's never fed, combined, sold, listed or traded (auto combine skips it too)." },
       { usage: "unlock <code>", desc: "Remove the lock." },
       { usage: "shard [codes…]", desc: `Break cards into 💠 shards (${Object.entries(SHARD_YIELD).map(([r, n]) => `${r} ${n}`).join(", ")}). No codes offers to break all spare duplicates; your best copy of each bunny is kept.`, aliases: ["shards"] },

@@ -8,6 +8,7 @@ import { User, UserCard, Auction } from "./models";
 import { buyItem, daily, ensureUser, getEnergy, hunt, huntMany, shopLimitsLeft, spendCoins, consumeItem } from "./services/player";
 import { burrowAdd, burrowCollect, combine, combineAll, craftCard, feed, giftCard, grantCard, lockCard, npcSell, rerollVariant, setLocked, shardCards, spareDupes } from "./services/cards";
 import { towerFight } from "./services/battle";
+import { achievementBoard, claimAchievements } from "./services/achievements";
 import { bump, claimQuests } from "./services/quests";
 import { CARDS } from "./data/cards";
 import { buyListing, listForSale, placeBid, settleDueAuctions, startAuction } from "./services/market";
@@ -351,4 +352,18 @@ test("players from before the tower/quests update (fields missing in the DB) sti
   }
   for (const k of ["hunt", "feed", "work", "burrow", "win"] as const) await bump("old", k);
   assert.ok((await claimQuests("old")).tutorialPaid);
+});
+
+test("achievements pay out once, even when two commands check at the same moment", async () => {
+  await ensureUser("ach", "achiever");
+  await User.updateOne({ discordId: "ach" }, { $set: { "stats.hunts": 10 } });
+  const before = await coinsOf("ach");
+  const [a, b] = await Promise.all([claimAchievements("ach"), claimAchievements("ach")]);
+  const paid = [...a, ...b].filter((x) => x.id === "hunt10");
+  assert.equal(paid.length, 1, "hunt10 paid exactly once");
+  const total = [...a, ...b].reduce((s, x) => s + x.coins, 0);
+  assert.equal(await coinsOf("ach"), before + total);
+  assert.equal((await claimAchievements("ach")).length, 0, "nothing new the second time");
+  const board = await achievementBoard("ach");
+  assert.ok(board.rows.find((r) => r.id === "hunt10")!.done);
 });

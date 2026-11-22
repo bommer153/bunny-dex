@@ -2,7 +2,7 @@
 import { randomBytes } from "node:crypto";
 import { teamBonus } from "./synergy";
 import { CARDS, ELEMENTS, RARITIES, getCard, type CardDef, type Element, type Rarity } from "./data/cards";
-import { BURROW_RATE, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ELEMENT_ADVANTAGE, LEVEL_CAP, QUESTS, RARITY_WEIGHT, VARIANTS, variantInfo, type Quest } from "./config";
+import { ACHIEVEMENTS, BURROW_RATE, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, ELEMENT_ADVANTAGE, LEVEL_CAP, QUESTS, RARITY_WEIGHT, VARIANTS, variantInfo, type AchievementStats, type Quest } from "./config";
 
 export type Rng = () => number; // [0, 1)
 
@@ -250,6 +250,32 @@ export function weekKey(day: string) {
 export const setTitle = (el: Element) => `${el[0].toUpperCase()}${el.slice(1)} Keeper`;
 /** Elements the player owns every card of. */
 export const completedSets = (owned: Set<string>) => ELEMENTS.filter((el) => CARDS.filter((c) => c.element === el).every((c) => owned.has(c.slug)));
+
+// ---- Achievements ----
+
+type AchievementUser = {
+  level: number; streak?: number | null; towerFloor?: number | null;
+  stats?: { hunts?: number | null; battlesWon?: number | null } | null;
+};
+/** What achievements measure, from the player and the distinct bunny + variant pairs they own. */
+export function achievementStats(u: AchievementUser, pairs: { slug: string; variant: string }[]): AchievementStats {
+  const slugs = new Set(pairs.map((p) => p.slug));
+  const special = pairs.filter((p) => p.variant !== "normal");
+  return {
+    hunts: u.stats?.hunts ?? 0,
+    dex: slugs.size,
+    rarest: Math.max(-1, ...[...slugs].map((s) => RARITIES.indexOf(getCard(s).rarity))),
+    variants: special.length,
+    variantKinds: new Set(special.map((p) => p.variant)).size,
+    battlesWon: u.stats?.battlesWon ?? 0,
+    towerFloor: u.towerFloor ?? 0,
+    streak: u.streak ?? 0,
+    level: u.level,
+    sets: completedSets(slugs).length,
+  };
+}
+/** Achievements the stats now meet that haven't been paid out yet. */
+export const dueAchievements = (s: AchievementStats, have: readonly string[]) => ACHIEVEMENTS.filter((a) => s[a.stat] >= a.goal && !have.includes(a.id));
 
 // ---- Pacing ----
 

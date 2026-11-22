@@ -1,4 +1,4 @@
-import type { Element, Rarity } from "./data/cards";
+import { CARDS, type Element, type Rarity } from "./data/cards";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -118,17 +118,54 @@ export const RARITY_EMOJI: Record<Rarity, string> = {
 };
 
 export const VARIANTS = [
-  { code: "normal", name: "Normal", mult: 1, weight: 100 },
-  { code: "foil", name: "Foil", mult: 1.5, weight: 12 },
-  { code: "golden", name: "Golden", mult: 2, weight: 6 },
-  { code: "shadow", name: "Shadow", mult: 2.2, weight: 5 },
-  { code: "crystal", name: "Crystal", mult: 2.5, weight: 4 },
-  { code: "rainbow", name: "Rainbow", mult: 3, weight: 2 },
-  { code: "celestial", name: "Celestial", mult: 4, weight: 1 },
-  { code: "royal", name: "Royal", mult: 5, weight: 0.5 },
+  { code: "normal", name: "Normal", emoji: "", mult: 1, weight: 100 },
+  { code: "foil", name: "Foil", emoji: "✨", mult: 1.5, weight: 12 },
+  { code: "golden", name: "Golden", emoji: "🌟", mult: 2, weight: 6 },
+  { code: "shadow", name: "Shadow", emoji: "🌑", mult: 2.2, weight: 5 },
+  { code: "crystal", name: "Crystal", emoji: "💎", mult: 2.5, weight: 4 },
+  { code: "rainbow", name: "Rainbow", emoji: "🌈", mult: 3, weight: 2 },
+  { code: "celestial", name: "Celestial", emoji: "🌌", mult: 4, weight: 1 },
+  { code: "royal", name: "Royal", emoji: "👑", mult: 5, weight: 0.5 },
 ] as const;
 export type Variant = (typeof VARIANTS)[number]["code"];
 export const variantInfo = (code: string) => VARIANTS.find((v) => v.code === code) ?? VARIANTS[0];
+/** "✨ Foil " for special variants, "" for normal: put it in front of a card name. */
+export const variantTag = (code: string) => (code === "normal" ? "" : `${variantInfo(code).emoji} ${variantInfo(code).name} `);
+/** Special variants (not normal): the variant Dex counts each card in each of these. */
+export const SPECIAL_VARIANTS = VARIANTS.filter((v) => v.code !== "normal");
+
+/** What achievements measure, computed from the player's data (nothing extra is tracked). */
+export type AchievementStats = {
+  hunts: number; dex: number; rarest: number; variants: number; variantKinds: number;
+  battlesWon: number; towerFloor: number; streak: number; level: number; sets: number;
+};
+/** One-time goals; each pays its coins once. `rarest` is a rarity index (2 rare … 6 secret). */
+export const ACHIEVEMENTS: { id: string; emoji: string; name: string; desc: string; stat: keyof AchievementStats; goal: number; coins: number }[] = [
+  { id: "hunt10", emoji: "🌿", name: "Sprout Seeker", desc: "Hunt 10 times", stat: "hunts", goal: 10, coins: 200 },
+  { id: "hunt100", emoji: "🌿", name: "Meadow Ranger", desc: "Hunt 100 times", stat: "hunts", goal: 100, coins: 1000 },
+  { id: "hunt1000", emoji: "🌿", name: "Hunt Legend", desc: "Hunt 1,000 times", stat: "hunts", goal: 1000, coins: 5000 },
+  { id: "dex10", emoji: "📖", name: "Budding Collector", desc: "Own 10 different bunnies", stat: "dex", goal: 10, coins: 300 },
+  { id: "dex27", emoji: "📖", name: "Halfway Dex", desc: "Own 27 different bunnies", stat: "dex", goal: 27, coins: 2000 },
+  { id: "dexall", emoji: "📖", name: "Complete Dex", desc: "Own every bunny", stat: "dex", goal: CARDS.length, coins: 10000 },
+  { id: "epic", emoji: "💜", name: "Epic Find", desc: "Own an epic bunny", stat: "rarest", goal: 3, coins: 500 },
+  { id: "legendary", emoji: "💛", name: "Golden Moment", desc: "Own a legendary bunny", stat: "rarest", goal: 4, coins: 1500 },
+  { id: "mythic", emoji: "❤️", name: "Myth Made Real", desc: "Own a mythic bunny", stat: "rarest", goal: 5, coins: 3000 },
+  { id: "secret", emoji: "🔮", name: "Secret Keeper", desc: "Own a secret bunny", stat: "rarest", goal: 6, coins: 5000 },
+  { id: "variant1", emoji: "✨", name: "Something Shiny", desc: "Own a special variant (foil, golden…)", stat: "variants", goal: 1, coins: 300 },
+  { id: "variant25", emoji: "✨", name: "Variant Hoarder", desc: "Collect 25 bunny + variant combos", stat: "variants", goal: 25, coins: 3000 },
+  { id: "variantall", emoji: "🌈", name: "Full Spectrum", desc: "Own all 7 special variants", stat: "variantKinds", goal: 7, coins: 5000 },
+  { id: "win10", emoji: "⚔️", name: "Scrapper", desc: "Win 10 battles", stat: "battlesWon", goal: 10, coins: 500 },
+  { id: "win100", emoji: "⚔️", name: "Champion", desc: "Win 100 battles", stat: "battlesWon", goal: 100, coins: 3000 },
+  { id: "tower10", emoji: "🏰", name: "Climber", desc: "Clear Meadow Tower floor 10", stat: "towerFloor", goal: 10, coins: 500 },
+  { id: "tower25", emoji: "🏰", name: "High Climber", desc: "Clear Meadow Tower floor 25", stat: "towerFloor", goal: 25, coins: 1500 },
+  { id: "tower50", emoji: "🏰", name: "Sky Tower", desc: "Clear Meadow Tower floor 50", stat: "towerFloor", goal: 50, coins: 4000 },
+  { id: "streak7", emoji: "🔥", name: "Regular", desc: "Reach a 7-day daily streak", stat: "streak", goal: 7, coins: 500 },
+  { id: "streak30", emoji: "🔥", name: "Devoted", desc: "Reach a 30-day daily streak", stat: "streak", goal: 30, coins: 3000 },
+  { id: "level10", emoji: "⭐", name: "Seasoned", desc: "Reach level 10", stat: "level", goal: 10, coins: 500 },
+  { id: "level25", emoji: "⭐", name: "Veteran", desc: "Reach level 25", stat: "level", goal: 25, coins: 2000 },
+  { id: "set1", emoji: "🏅", name: "Element Keeper", desc: "Complete an element set", stat: "sets", goal: 1, coins: 1000 },
+  { id: "setall", emoji: "🏅", name: "Master of Elements", desc: "Complete all 7 element sets", stat: "sets", goal: 7, coins: 10000 },
+];
 
 /** Attacker element beats defender element → +25% attack. */
 export const ELEMENT_ADVANTAGE: Record<Element, Element> = {

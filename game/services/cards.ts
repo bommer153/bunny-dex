@@ -1,5 +1,5 @@
 import { CARDS, RARITIES, ELEMENTS, getCard, type Rarity } from "../data/cards";
-import { CARROT_XP, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, REROLL_COST, SHARD_YIELD, craftCost } from "../config";
+import { CARROT_XP, COMBINE_CHANCE, COMBINE_COUNT, CONFIG, REROLL_COST, SHARD_YIELD, SPECIAL_VARIANTS, craftCost } from "../config";
 import { fail } from "../errors";
 import { User, UserCard, type CardStatus } from "../models";
 import { applyCardXp, autoPick, burrowEarnings, burrowSlots, cardValue, completedSets, rollVariant, spareCards, feedXp, makeCode, nextRarity, rollCombine, setTitle, type Rng } from "../rules";
@@ -64,18 +64,35 @@ export async function listCards(ownerId: string, opts: { rarity?: Rarity; slugs?
   return { cards: all.slice((page - 1) * perPage, page * perPage), page, pages, total: all.length };
 }
 
+/** Every distinct bunny + variant the player owns (one entry per pair, however many copies). */
+export async function ownedPairs(ownerId: string) {
+  const rows = await UserCard.aggregate<{ _id: { slug: string; variant: string } }>([
+    { $match: { ownerId } },
+    { $group: { _id: { slug: "$slug", variant: "$variant" } } },
+  ]);
+  return rows.map((r) => r._id);
+}
+
 export async function collectionProgress(ownerId: string) {
-  const owned = new Set<string>(await UserCard.distinct("slug", { ownerId }));
+  const pairs = await ownedPairs(ownerId);
+  const owned = new Set(pairs.map((p) => p.slug));
   const by = <K extends string>(keys: readonly K[], f: (c: (typeof CARDS)[number]) => K) =>
     keys.map((k) => {
       const pool = CARDS.filter((c) => f(c) === k);
       return { key: k, owned: pool.filter((c) => owned.has(c.slug)).length, total: pool.length };
     });
+  // Variant Dex: each bunny counts once per special variant (foil, golden…) you own it in.
+  const special = pairs.filter((p) => p.variant !== "normal");
   return {
     owned: owned.size,
     total: CARDS.length,
     rarity: by(RARITIES, (c) => c.rarity),
     element: by(ELEMENTS, (c) => c.element),
+    variants: {
+      owned: special.length,
+      total: CARDS.length * SPECIAL_VARIANTS.length,
+      kinds: SPECIAL_VARIANTS.map((v) => ({ key: v.code, owned: special.filter((p) => p.variant === v.code).length, total: CARDS.length })),
+    },
     ownedSlugs: owned,
   };
 }

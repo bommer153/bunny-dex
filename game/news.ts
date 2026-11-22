@@ -1,6 +1,17 @@
 // Patch notes for `bd news`, newest first. Add an entry with each release players should know about.
 export const NEWS: { date: string; title: string; lines: string[] }[] = [
   {
+    date: "2026-11-22",
+    title: "Trading cards, variants you can see, achievements",
+    lines: [
+      "🃏 Every bunny now shows as a real trading card: name, element and rarity badges, its trait, ability and stats.",
+      "✨ Variants finally look the part: Foil shimmers, Golden glows, Shadow darkens, Crystal frosts, Rainbow, Celestial stars and Royal velvet. Each card shows its variant on a chip.",
+      "📖 `bd dex` has a **Variant Dex**: collect every bunny in every variant.",
+      "🎖️ **Achievements**: 24 one-time goals that pay coins the moment you reach them. `bd achievements`",
+      "📉 Rare-and-better hunt odds are a third lower, so every big pull counts.",
+    ],
+  },
+  {
     date: "2026-11-20",
     title: "Endless tower, shinier collection",
     lines: [

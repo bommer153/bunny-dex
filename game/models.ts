@@ -21,6 +21,7 @@ const userSchema = new Schema(
     dayClaimed: { type: [String], default: [] },
     weekClaimed: { type: [String], default: [] },
     titles: { type: [String], default: [] }, // earned by completing an element set
+    achievements: { type: [String], default: [] }, // ACHIEVEMENTS ids already paid out
     shards: { type: Number, default: 0, min: 0 }, // from breaking cards down; spent to craft a chosen card
     towerFloor: { type: Number, default: 0 }, // highest Meadow Tower floor cleared
     guilds: { type: [String], default: [], index: true }, // servers the player has played in (server leaderboards)

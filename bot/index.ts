@@ -4,7 +4,7 @@ import {
   TextInputBuilder, TextInputStyle, type Interaction, type Message, type MessageActionRowComponentBuilder, type ModalActionRowComponentBuilder,
 } from "discord.js";
 import { connectDb } from "../game/db";
-import { COMBINE_COUNT, CONFIG, RARITY_EMOJI, variantInfo } from "../game/config";
+import { COMBINE_COUNT, CONFIG, RARITY_EMOJI, variantInfo, variantTag } from "../game/config";
 import { getCard } from "../game/data/cards";
 import { makeCode, rollHunt } from "../game/rules";
 import { GameError } from "../game/errors";
@@ -20,7 +20,7 @@ import {
   type Ctx, type Reply,
 } from "./commands";
 import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, loadMoods, mention, mood, rarityBadge, row } from "./ui";
-import { warmCards } from "./grid";
+import { drawCard, warmCards } from "./grid";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
 import { nextMinBid } from "../game/rules";
@@ -86,9 +86,10 @@ async function maybeSpawn(msg: Message) {
   const { card, variant } = rollHunt(Math.random);
   const id = makeCode();
   spawns.set(id, { slug: card.slug, variant });
-  const e = cardEmbed(card, { variant, title: `🌾 A wild ${RARITY_EMOJI[card.rarity]} ${variant !== "normal" ? variant + " " : ""}${card.name} appeared!`, image: "full" })
+  await drawCard(card.slug, variant);
+  const e = cardEmbed(card, { variant, title: `🌾 A wild ${RARITY_EMOJI[card.rarity]} ${variantTag(variant)}${card.name} appeared!`, image: "full" })
     .setFooter({ text: `First to click catches it · runs away in ${CONFIG.spawnTtlMs / 60_000} min` });
-  const sent = await msg.channel.send({ embeds: [e], files: [cardFile(card.slug)], components: [row(btn(cid("catch", id, "*"), "🥕 Catch!", ButtonStyle.Success))] });
+  const sent = await msg.channel.send({ embeds: [e], files: [cardFile(card.slug, variant)], components: [row(btn(cid("catch", id, "*"), "🥕 Catch!", ButtonStyle.Success))] });
   setTimeout(() => {
     const s = spawns.get(id);
     spawns.delete(id);
@@ -324,10 +325,11 @@ async function handleInteraction(i: Interaction) {
         if (!r.success) {
           return animate({ embeds: [info(`${mood("laugh", "💨")} **Poof!** The combine failed (${Math.round(r.chance * 100)}% chance).\nYou kept **${r.keptCard.name}** \`${r.kept}\`.\n\n${used}`, 0x52525b)], components: again, frames }, onUpdate(i));
         }
-        const e = cardEmbed(r.card, { variant: r.variant, title: `🧪✨ Success! You got ${RARITY_EMOJI[r.card.rarity]} ${r.variant !== "normal" ? r.variant + " " : ""}${r.card.name}!`, image: "full" })
+        await drawCard(r.card.slug, r.variant);
+        const e = cardEmbed(r.card, { variant: r.variant, title: `🧪✨ Success! You got ${RARITY_EMOJI[r.card.rarity]} ${variantTag(r.variant)}${r.card.name}!`, image: "full" })
           .addFields({ name: "Inputs", value: used.replace("**Fused:** ", "") })
           .setFooter({ text: `Card code: ${r.code} · ${r.from} → ${r.card.rarity}` });
-        return animate({ embeds: [e], files: [cardFile(r.card.slug)], components: again, frames }, onUpdate(i));
+        return animate({ embeds: [e], files: [cardFile(r.card.slug, r.variant)], components: again, frames }, onUpdate(i));
       }
       case "cmball": {
         const rarity = arg as Rarity;
@@ -336,7 +338,7 @@ async function handleInteraction(i: Interaction) {
         const rs = await cards.combineAll(uid, rarity);
         const wins = rs.flatMap((r) => (r.success ? [r] : []));
         const left = (await cards.spareDupes(uid)).filter((c) => getCard(c.slug).rarity === rarity).length;
-        const got = wins.map((r) => `${rarityBadge(r.card.rarity)} ${r.variant !== "normal" ? r.variant + " " : ""}**${r.card.name}** \`${r.code}\``).join("\n");
+        const got = wins.map((r) => `${rarityBadge(r.card.rarity)} ${variantTag(r.variant)}**${r.card.name}** \`${r.code}\``).join("\n");
         const text = `🧪 **Combined ${rs.length}×** ${rarityBadge(rarity)} ${rarity}\n✨ **${wins.length}** upgraded · 💨 ${rs.length - wins.length} fizzled${got ? `\n\n${got}` : ""}`;
         const clip = clipFrame(`combine-${rarity}-${wins.length ? "ok" : "fail"}`, opening);
         const next = row(
