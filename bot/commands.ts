@@ -6,7 +6,7 @@ import { NEWS } from "../game/news";
 import { fail } from "../game/errors";
 import { GUIDE, findGuide } from "../game/guide";
 import { Guild, User, UserCard, type TradeDoc } from "../game/models";
-import { collectionGrid, drawCard } from "./grid";
+import { CARD_CROP, collectionGrid, drawCard } from "./grid";
 import { auctionSlots, autoPick, burrowSlots, cardValue, completedSets, towerReward, towerTeam, energyWaitMs, formatDuration, isRarePlus, nextMinBid, nextRarity, parseDuration, setTitle, streakCoins } from "../game/rules";
 import * as quests from "../game/services/quests";
 import * as player from "../game/services/player";
@@ -15,7 +15,7 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import * as achievements from "../game/services/achievements";
-import { fx } from "./fx";
+import { fx, huntClip } from "./fx";
 import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardImage, cardLine, cid, coins, embed, info, mention, mood, rarityBadge, row } from "./ui";
 
 /** `frames` are shown first, one after another, by editing the message (a simple Discord "animation"). */
@@ -317,8 +317,14 @@ export async function doHunt(uid: string, count = 1, guildId?: string | null): P
         .setFields(status);
   e.setFooter({ text: `+${h.xpGained} XP${h.xpGained < CONFIG.huntXp * count ? " (half XP after 100 hunts today)" : ""} · ${count > 1 ? `×${count} · ` : ""}costs ⚡${cost * count}` });
   const opening = count > 1 ? `🌿 *You sweep the meadow ${count} times…*` : "🌿 *You push through the tall grass…*";
-  const clip = clipFrame(`hunt-${best.card.rarity}`, opening); // the result is already confirmed; the clip only builds up to it
-  return { content: extra || undefined, embeds: [e], files: [cardFile(best.card.slug, best.variant)], components: huntButtons(uid, best.code), frames: clip ? [clip, ...revealFrames(best.card.rarity, opening).slice(big ? 1 : 3)] : revealFrames(best.card.rarity, opening) };
+  // The result is already confirmed; the clip builds up to it and flips into the best card's own picture.
+  // If that clip can't be drawn, the generic one for the rarity plays instead, then text-only suspense frames.
+  const pic = cardFile(best.card.slug, best.variant);
+  const text = big ? `${opening}\n🌟 **A powerful ${best.card.rarity} aura fills the air!**` : opening;
+  const clip = await huntClip(pic.name!, best.card.rarity, pic.attachment as Buffer | string, typeof pic.attachment === "string" ? undefined : CARD_CROP)
+    .then((c): Reply => ({ embeds: [info(text).setImage(c.url)], files: [c.file], ms: c.ms + 400 }))
+    .catch((err) => (console.error("hunt clip failed", err), clipFrame(`hunt-${best.card.rarity}`, opening)));
+  return { content: extra || undefined, embeds: [e], files: [pic], components: huntButtons(uid, best.code), frames: clip ? [clip] : revealFrames(best.card.rarity, opening) };
 }
 
 // ================= Commands =================

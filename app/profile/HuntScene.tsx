@@ -4,9 +4,9 @@
 // ×5 / ×10: face-down cards are dealt into the stage; tap each to flip, or Reveal all. Skip shows everything at once.
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import type { Rarity } from "@/game/data/cards";
-import { RARITY_EMOJI, variantInfo } from "@/game/config";
+import { RARITY_EMOJI, variantInfo, variantTag } from "@/game/config";
 import { formatDuration } from "@/game/format";
 import { huntPlay } from "../actions";
 import { button, ghostButton, panel } from "../components";
@@ -41,6 +41,10 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
   const [flipped, setFlipped] = useState<boolean[]>([]);
   const flips = useRef<boolean[]>([]); // mirror of `flipped` for the staggered Reveal-all timers
   const [error, setError] = useState("");
+  // HTML overlays around the 3D card: a light pillar in the rarity colour while it charges, a flash as it turns, the variant's banner.
+  const [aura, setAura] = useState<{ color: string; rank: number; key: number } | null>(null);
+  const [flash, setFlash] = useState<{ color: string; key: number } | null>(null);
+  const [variantPop, setVariantPop] = useState<string | null>(null);
   const fx = useRef<{ fog?: { stop: () => void } | null; trail?: { stop: () => void } | null; hover?: () => void; card?: CardMesh; step: number }>({ step: 0 });
 
   const multi = (batch?.cards.length ?? 0) > 1;
@@ -53,6 +57,9 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
     if (phase === "searching" || phase === "ready" || phase === "revealing") return;
     setError("");
     setBatch(null);
+    setAura(null);
+    setFlash(null);
+    setVariantPop(null);
     flips.current = [];
     setFlipped([]);
     stopHover();
@@ -126,10 +133,22 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
     const card = fx.current.card ?? stage.card(r.card.slug, r.rarity, r.card.variant);
     fx.current.card = card;
     const root = card.root;
-    // Rarer finds charge longer before the card turns.
+    const big = rank >= RANK.legendary;
+    const color = `rgb(${rgb.map((v) => Math.round(v * 255)).join(" ")})`;
+    const motion = !stage.reduced && !reducedMotion();
+    // Rarer finds charge longer before the card turns: a pillar of light in the rarity colour rises behind it,
+    // sparks pour up through it, and legendary+ cards shake harder and harder.
+    if (motion) setAura({ color, rank, key: fx.current.step });
     const charge = stage.particles({ count: 60 + rank * 40, rgb, rate: 40 + rank * 25, radius: 0.3, size: [0.1, 0.3], life: [0.3, 0.7], power: [0.5, 1.5], gravity: 0 });
-    await stage.tween(250 + rank * 140, (k) => { root.position.y = Math.sin(k * Math.PI * 6) * 0.03 * k * (rank + 1); }, ease.linear);
+    const rise = rank >= RANK.rare ? stage.particles({ count: 40 + rank * 30, rgb, rate: 30 + rank * 20, radius: 0.9, size: [0.03, 0.1], life: [0.6, 1.2], power: [0.2, 0.6], gravity: 1.2 }) : null;
+    const shake = 0.03 * (rank + 1) * (big ? 1.8 : 1);
+    await stage.tween(350 + rank * 170 + (big ? 300 : 0), (k) => {
+      root.position.y = Math.sin(k * Math.PI * (6 + rank * 2)) * shake * k;
+      if (big) root.rotation.z = Math.sin(k * Math.PI * 14) * 0.05 * k;
+    }, ease.linear);
+    root.rotation.z = 0;
     charge?.stop();
+    rise?.stop();
     if (stage.skipping || stage.disposed) return; // Skip already showed the final card
     stopFog();
     stage.particles({ count: 50, rgb: MIST, radius: 1, size: [1.2, 2.5], life: [0.8, 1.4], power: [3, 6], gravity: 0, blend: "standard", alpha: 0.2 });
@@ -140,13 +159,23 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
       root.scaling.setAll(1 + Math.sin(k * Math.PI) * 0.12);
     }, ease.inOut);
     await stage.wait(300);
+    // Edge-on: the flash hides the turn, the pillar gives way to the burst.
+    if (motion) setFlash({ color, key: fx.current.step });
+    setAura(null);
     stage.particles({ count: BURST[r.rarity], rgb, radius: 0.6, power: [2 + rank * 0.4, 5 + rank * 0.8], size: [0.04, 0.24] });
     if (rank >= RANK.epic) void stage.shake(400 + rank * 60, 0.05 * (rank - 2));
     await flip;
     root.rotation.y = 0;
-    if (rank >= RANK.legendary && !stage.skipping) {
+    if (big && !stage.skipping) {
       const sp = stage.particles({ count: 150, rgb, rate: 25, radius: 2.2, power: [0.1, 0.4], size: [0.04, 0.12], gravity: 0.3, life: [0.6, 1.6] });
       setTimeout(() => sp?.stop(), 4000);
+    }
+    // A special variant gets its own shimmer in the variant's colour and a banner.
+    if (r.card.variant !== "normal" && !stage.skipping) {
+      const v = variantInfo(r.card.variant).color;
+      const vrgb = [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16) / 255) as [number, number, number];
+      stage.particles({ count: 90, rgb: vrgb, radius: 1.6, power: [0.3, 1.2], size: [0.03, 0.1], life: [0.5, 1.2], gravity: 0.4 });
+      setVariantPop(r.card.variant);
     }
     setPhase((p) => (p === "revealing" ? "shown" : p));
   }
@@ -175,6 +204,7 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
       finishSpread();
       return;
     }
+    setAura(null);
     if (stage && result) {
       stage.skip();
       stopSearch();
@@ -208,7 +238,20 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
       </div>
       <StageFrame glow={phase === "shown" && !!best && RANK[best.rarity] >= RANK.epic}>
       <div className={`relative w-full bg-[radial-gradient(ellipse_at_50%_60%,#3b1764,#130a20_70%)] ${multi ? "min-h-[16rem]" : "aspect-[4/3] sm:aspect-[16/9] max-h-[460px]"}`}>
+        {aura && (
+          // Behind the canvas (it's transparent), so the pillar rises behind the 3D card.
+          <div key={aura.key} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="hunt-pillar" style={{ "--c": aura.color, "--w": `${16 + aura.rank * 6}%`, "--d": `${350 + aura.rank * 170}ms`, opacity: 0.45 + aura.rank * 0.08 } as CSSProperties} />
+            {aura.rank >= RANK.legendary && <div className="hunt-pillar hunt-pillar-core" style={{ "--c": "#fff", "--w": "7%", "--d": "600ms" } as CSSProperties} />}
+          </div>
+        )}
         <canvas ref={canvasRef} aria-hidden className="absolute inset-0 size-full pointer-events-none" />
+        {flash && <div key={flash.key} aria-hidden className="hunt-flash" style={{ "--c": flash.color } as CSSProperties} />}
+        {variantPop && phase === "shown" && (
+          <p className={`vchip-${variantPop} anim-pop absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-current bg-plum-950/85 px-3 py-1 text-sm font-bold uppercase tracking-wider`}>
+            {variantTag(variantPop)}variant!
+          </p>
+        )}
         {showFallback && (
           // eslint-disable-next-line @next/next/no-img-element -- no-WebGL fallback: the back while waiting, the art once revealed
           <img src={fallbackFace ? `/cards/${result.card.slug}.png` : "/brand/card-back.webp"} alt="" className="absolute inset-y-[6%] left-1/2 h-[88%] -translate-x-1/2 rounded-lg anim-pop" />
@@ -233,11 +276,17 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
                       </span>
                       <span className={`flip-face flip-front card-border ${on ? GLOW[c.rarity] : ""}`}>
                         <Image src={`/cards/${c.card.slug}.png`} alt="" width={120} height={168} className="size-full rounded-[5px] object-cover" />
+                        {c.card.variant !== "normal" && (
+                          <>
+                            <span className={`vfx vfx-${c.card.variant}`} />
+                            <span className={`vchip-${c.card.variant} absolute left-1 top-1 rounded-full border border-current bg-plum-950/85 px-1 text-[8px] font-bold uppercase leading-3 sm:text-[9px]`}>{variantInfo(c.card.variant).name}</span>
+                          </>
+                        )}
                       </span>
                     </span>
                     {on && RANK[c.rarity] >= RANK.rare && <Burst items={["✨", "◆"]} count={8 + RANK[c.rarity] * 2} spread={45} salt={i + 1} />}
                   </button>
-                  <div className={`mt-1 truncate text-center text-[10px] sm:text-xs ${on ? TEXT[c.rarity] : "text-transparent"}`}>{RARITY_EMOJI[c.rarity]} {c.name}</div>
+                  <div className={`mt-1 truncate text-center text-[10px] sm:text-xs ${on ? TEXT[c.rarity] : "text-transparent"}`}>{RARITY_EMOJI[c.rarity]} {variantTag(c.card.variant)}{c.name}</div>
                 </li>
               );
             })}
@@ -274,7 +323,7 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
             <div className="gold-frame-inner flex flex-col gap-0.5 px-4 py-2">
               {multi && <p className="text-[10px] uppercase tracking-widest text-gold-400">Best of {batch!.cards.length}</p>}
               <p className={`text-lg font-semibold ${TEXT[best.rarity]}`}>
-                {RARITY_EMOJI[best.rarity]} {best.card.variant !== "normal" && `${variantInfo(best.card.variant).name} `}{best.name} <span className="text-sm font-normal text-plum-400">({best.rarity})</span>
+                {RARITY_EMOJI[best.rarity]} {variantTag(best.card.variant)}{best.name} <span className="text-sm font-normal text-plum-400">({best.rarity})</span>
               </p>
               <p className="text-sm text-plum-300">
                 {multi ? counts.map(([r, n]) => `${RARITY_EMOJI[r as Rarity]} ${n} ${r}`).join(" · ") : <>Code <code>{best.card.code}</code></>}

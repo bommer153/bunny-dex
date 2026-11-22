@@ -1,11 +1,11 @@
 import { before, test } from "node:test";
 import assert from "node:assert/strict";
-import { fx, warmFx, fxNames } from "./fx";
+import { fx, huntClip, warmFx, fxNames } from "./fx";
 import { tryMedia, withoutMedia } from "./media";
 import { battleReply, clipFrame, renderHelp, txReply, type Reply } from "./commands";
 import { cardEmbed, cardFile, info } from "./ui";
 import sharp from "sharp";
-import { collectionGrid, drawCard, warmCards } from "./grid";
+import { CARD_CROP, collectionGrid, drawCard, warmCards } from "./grid";
 import { CARDS, RARITIES, type Rarity } from "../game/data/cards";
 
 before(async () => { await warmFx(); });
@@ -78,6 +78,22 @@ test("card pictures: framed in the rarity color, legendary+ animated, embed URL 
   assert.equal(cardFile(legend.slug).name, `${legend.slug}.gif`);
   assert.equal((cardFile(legend.slug).attachment as Buffer).subarray(0, 6).toString(), "GIF89a");
   assert.equal(cardEmbed(legend, { image: "full" }).toJSON().image?.url, `attachment://${legend.slug}.gif`);
+});
+
+test("hunt reveal clip: a GIF under 1 MB that ends on the card, drawn once per card picture", async () => {
+  const def = CARDS.find((c) => c.rarity === "legendary")!;
+  await drawCard(def.slug);
+  const pic = cardFile(def.slug);
+  const t0 = Date.now();
+  const a = await huntClip(pic.name!, def.rarity, pic.attachment as Buffer, CARD_CROP);
+  const first = Date.now() - t0;
+  const buf = a.file.attachment as Buffer;
+  assert.equal(buf.subarray(0, 6).toString(), "GIF89a");
+  assert.ok(buf.length < 1_000_000, `${buf.length} bytes`);
+  assert.ok(a.ms > 1500 && a.ms < 5000, `${a.ms}ms`);
+  const t1 = Date.now();
+  await huntClip(pic.name!, def.rarity, pic.attachment as Buffer, CARD_CROP);
+  assert.ok(Date.now() - t1 < first / 4, "second pull of the same card reuses the clip");
 });
 
 test("variant card pictures are drawn on demand and the embed points at them", async () => {

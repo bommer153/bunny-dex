@@ -149,6 +149,20 @@ class Raster {
       }
     }
   }
+  /** Additive vertical light beam from the bottom up to `top`, fading upward (hunt charge). */
+  beam(cx: number, w: number, top: number, c: RGB, a = 1) {
+    const x0 = Math.max(0, Math.floor(cx - w * 2.5)), x1 = Math.min(this.w - 1, Math.ceil(cx + w * 2.5));
+    const y0 = Math.max(0, Math.floor(top));
+    for (let x = x0; x <= x1; x++) {
+      const kx = a * Math.exp(-(((x - cx) / w) ** 2));
+      if (kx < 0.004) continue;
+      for (let y = y0; y < this.h; y++) {
+        const k = kx * clamp01((y - top) / (this.h - top + 1)) ** 0.6;
+        const i = (y * this.w + x) * 3;
+        this.px[i] += c[0] * k; this.px[i + 1] += c[1] * k; this.px[i + 2] += c[2] * k;
+      }
+    }
+  }
   /** Whole-frame tint (flashes). */
   wash(c: RGB, a: number) {
     if (a <= 0) return;
@@ -180,6 +194,40 @@ function encode(c: Clip) {
   }
   gif.finish();
   return Buffer.from(gif.bytes());
+}
+
+/**
+ * Like encode, but with one palette for the whole clip (built from a few sample moments) instead of one per frame:
+ * several times faster, for clips drawn while a player waits. Fine when the colours stay alike through the clip.
+ */
+function encodeFast(c: Clip, samples = [0.3, 0.6, 0.74, 0.92]) {
+  const render = (f: number) => {
+    const r = new Raster(c.w, c.h);
+    const shift = c.draw(r, f / (c.frames - 1), f) ?? [0, 0];
+    return r.rgba(shift[0], shift[1]);
+  };
+  const picks = samples.map((t) => render(Math.round(t * (c.frames - 1))));
+  const mixed = new Uint8ClampedArray(picks.length * c.w * c.h * 4);
+  picks.forEach((p, k) => mixed.set(p, k * p.length));
+  const palette = quantize(mixed, 256);
+  const gif = GIFEncoder();
+  for (let f = 0; f < c.frames; f++) gif.writeFrame(applyPalette(render(f), palette), c.w, c.h, { palette: f === 0 ? palette : undefined, delay: c.delay, repeat: -1 });
+  gif.finish();
+  return Buffer.from(gif.bytes());
+}
+
+/** Two layers of mist as scrolling textures (one noise pass, then lookups), for clips drawn on demand. */
+let mistTex: { a: Float32Array; b: Float32Array; w: number; h: number } | null = null;
+function mist(w: number, h: number) {
+  if (mistTex?.w === w * 2 && mistTex.h === h) return mistTex;
+  const W2 = w * 2, a = new Float32Array(W2 * h), b = new Float32Array(W2 * h);
+  // Wrapped horizontally (blend with the copy one period over) so scrolling never shows a seam.
+  for (let y = 0; y < h; y++) for (let x = 0; x < W2; x++) {
+    const k = x / W2;
+    a[y * W2 + x] = noise(x / 40, y / 24) * (1 - k) + noise((x - W2) / 40, y / 24) * k;
+    b[y * W2 + x] = noise(x / 17, y / 12 + 9) * (1 - k) + noise((x - W2) / 17, y / 12 + 9) * k;
+  }
+  return (mistTex = { a, b, w: W2, h });
 }
 
 // ---------------- The clips ----------------
@@ -228,6 +276,96 @@ function hunt(rarity: Rarity): Clip {
       }
     },
   };
+}
+
+/**
+ * Hunt reveal for one pulled card: the gold trail searches, the card back rises, light beams in the rarity colour
+ * climb behind it (more and brighter for rarer cards, legendary+ shake), a flash hides the flip and the card turns
+ * into its real picture (`face`: the card picture with its variant look) inside a burst. Plays once and ends on the card.
+ */
+const RW = 300, RH = 210, FW = 90, FH = 126;
+function huntReveal(rarity: Rarity, face: Img | null, back: Img | null): Clip {
+  const rank = RANK[rarity], col = RARITY_RGB[rarity];
+  const big = rank >= RANK.legendary;
+  const burst = Array.from({ length: 40 + rank * 14 }, (_, i) => { const r = rng(rank * 991 + i); return { a: r() * Math.PI * 2, s: 0.4 + r() * 0.8, z: 0.8 + r() * 1.6 }; });
+  const sparks = Array.from({ length: 10 + rank * 8 }, (_, i) => { const r = rng(rank * 313 + i); return { x: (r() - 0.5) * (60 + rank * 14), v: 0.7 + r() * 0.9, o: r(), z: 0.8 + r() }; });
+  // Side beams peek out on both sides of the card (more for rarer cards); the centre one is wider than the card.
+  const beams = Array.from({ length: Math.ceil(rank / 2) * 2 }, (_, k) => (k % 2 ? 1 : -1) * (54 + Math.floor(k / 2) * 22));
+  const cx = RW / 2, cy = RH / 2, m = mist(RW, RH);
+  const at = (tex: Float32Array, x: number, y: number) => tex[y * m.w + (((Math.round(x) % m.w) + m.w) % m.w)];
+  return {
+    w: RW, h: RH, frames: 40 + rank * 3, delay: 60,
+    draw(r, t) {
+      const search = clamp01(t / 0.3), rise = clamp01((t - 0.2) / 0.18), charge = clamp01((t - 0.36) / 0.32);
+      const flip = clamp01((t - 0.68) / 0.12), reveal = clamp01((t - 0.78) / 0.22);
+      r.fill((x, y) => {
+        const sky = mix(hex(0x1c0d30), hex(0x0d0716), y / RH);
+        const fog = (at(m.a, x + t * 60, y) * 0.65 + at(m.b, x - t * 30, y) * 0.35) * 0.55;
+        const clear = clamp01(Math.hypot(x - cx, (y - cy) * 1.5) / (reveal * 190 + charge * 40 + 0.01));
+        return mix(sky, [0.42, 0.22, 0.62], fog * (charge > 0 || reveal > 0 ? clear : 1));
+      });
+      for (let k = 0; k < 14 && t < 0.34; k++) { // search: a gold trail sweeps through the mist
+        const u = search - k * 0.025;
+        if (u < 0) break;
+        r.glow(-10 + u * (RW + 20), cy + Math.sin(u * 11) * 30, 3.4 - k * 0.18, [1, 0.85, 0.4], (1 - k / 14) * 0.9);
+      }
+      if (charge > 0 && flip < 1) { // beams climb behind the card, pulsing; sparks pour upward
+        const pulse = 0.75 + 0.25 * Math.sin(t * 60);
+        const top = RH * (1 - charge * 1.15);
+        r.beam(cx, 30 + rank * 3, top, col, (0.3 + rank * 0.07) * pulse);
+        for (const off of beams) r.beam(cx + off, 5 + rank, top + Math.abs(off) * 0.4, col, (0.25 + rank * 0.06) * pulse);
+        if (big) r.beam(cx, 46, top, [1, 1, 1], 0.18 * pulse);
+        for (const s of sparks) r.glow(cx + s.x, RH - ((t * s.v * 2 + s.o) % 1) * RH, s.z, mix(col, [1, 1, 1], 0.4), charge * 0.9);
+        r.glow(cx, cy, 34 + rank * 6, col, (0.2 + charge * 0.5) * pulse);
+      }
+      if (rise > 0) {
+        const y = RH + FH - (cy + FH) * (1 - (1 - rise) ** 3) + (reveal ? 0 : Math.sin(t * 25) * 1.5 * charge);
+        const sx = Math.abs(Math.cos(flip * Math.PI));
+        if (flip < 0.5) r.image(back, cx, y, FW, FH, sx);
+        else r.image(face, cx, y, FW, FH, sx);
+      }
+      if (flip > 0.4 && flip < 0.75) r.wash(mix(col, [1, 1, 1], 0.5), (1 - Math.abs(flip - 0.55) / 0.2) * 0.45); // the flash hides the turn
+      if (reveal > 0) {
+        r.ring(cx, cy, reveal * (90 + rank * 14), 3, col, (1 - reveal) * 0.9);
+        for (const p of burst) r.glow(cx + Math.cos(p.a) * reveal * 150 * p.s, cy + Math.sin(p.a) * reveal * 100 * p.s, p.z, col, 1 - reveal * 0.85);
+        if (big) for (let k = 0; k < 6; k++) { const a = k + t * 3; r.star(cx + Math.cos(a) * 70 * reveal, cy + Math.sin(a) * 50 * reveal, 6, col, 0.9); }
+      }
+      // Legendary+ shake harder as the charge builds; epic+ jolt on the reveal.
+      if (big && charge > 0 && flip < 0.5) return [Math.sin(t * 140) * charge * (rank - 2), Math.cos(t * 110) * charge * (rank - 3)];
+      if (rank >= RANK.epic && reveal > 0 && reveal < 0.25) return [Math.sin(t * 90) * rank * 0.8, Math.cos(t * 70) * rank * 0.5];
+    },
+  };
+}
+
+/** Loads an image as an Img of w×h; `crop` (fractions) cuts out part of it first. */
+async function loadImg(src: Buffer | string, w: number, h: number, crop?: { left: number; top: number; width: number; height: number }): Promise<Img> {
+  let s = sharp(src);
+  if (crop) {
+    const m = await sharp(src).metadata();
+    const H0 = m.pageHeight ?? m.height!; // an animated card picture: crop from its first frame
+    s = sharp(src).extract({ left: Math.round(crop.left * m.width!), top: Math.round(crop.top * H0), width: Math.round(crop.width * m.width!), height: Math.round(crop.height * H0) });
+  }
+  const { data, info } = await s.resize(w, h).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { w: info.width, h: info.height, px: Float32Array.from(data, (v) => v / 255) };
+}
+
+let REVEAL_BACK: Img | null = null;
+const reveals = new Map<string, { buf: Buffer; ms: number }>(); // per card + variant, oldest first
+/**
+ * The hunt reveal clip for one card, drawn the first time that card + variant is pulled (~0.3 s, then kept).
+ * `picture` is the card's picture (cardFile), `crop` where the card sits in it. Throws if it can't be drawn.
+ */
+export async function huntClip(key: string, rarity: Rarity, picture: Buffer | string, crop?: { left: number; top: number; width: number; height: number }) {
+  let c = reveals.get(key);
+  if (!c) {
+    REVEAL_BACK ??= await loadImg(path.join(process.cwd(), "public", "brand", "card-back.webp"), FW, FH).catch(() => null);
+    const clip = huntReveal(rarity, await loadImg(picture, FW, FH, crop), REVEAL_BACK);
+    c = { buf: encodeFast(clip), ms: clip.frames * clip.delay };
+    reveals.set(key, c);
+    // shortcut: keeps the 40 newest clips (~12 MB); raise it if common pulls keep getting redrawn.
+    if (reveals.size > 40) reveals.delete(reveals.keys().next().value!);
+  }
+  return { file: new AttachmentBuilder(c.buf, { name: "hunt.gif" }), url: "attachment://hunt.gif", ms: c.ms };
 }
 
 /** Battle highlight: both cards dash in and clash; the confirmed winner side glows. side a = left. */

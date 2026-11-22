@@ -118,14 +118,14 @@ export const RARITY_EMOJI: Record<Rarity, string> = {
 };
 
 export const VARIANTS = [
-  { code: "normal", name: "Normal", emoji: "", mult: 1, weight: 100 },
-  { code: "foil", name: "Foil", emoji: "✨", mult: 1.5, weight: 12 },
-  { code: "golden", name: "Golden", emoji: "🌟", mult: 2, weight: 6 },
-  { code: "shadow", name: "Shadow", emoji: "🖤", mult: 2.2, weight: 5 },
-  { code: "crystal", name: "Crystal", emoji: "💎", mult: 2.5, weight: 4 },
-  { code: "rainbow", name: "Rainbow", emoji: "🎨", mult: 3, weight: 2 },
-  { code: "celestial", name: "Celestial", emoji: "🌌", mult: 4, weight: 1 },
-  { code: "royal", name: "Royal", emoji: "👑", mult: 5, weight: 0.5 },
+  { code: "normal", name: "Normal", emoji: "", color: "#e9defc", mult: 1, weight: 100 },
+  { code: "foil", name: "Foil", emoji: "✨", color: "#7dd3fc", mult: 1.5, weight: 12 },
+  { code: "golden", name: "Golden", emoji: "🌟", color: "#fbbf24", mult: 2, weight: 6 },
+  { code: "shadow", name: "Shadow", emoji: "🖤", color: "#c084fc", mult: 2.2, weight: 5 },
+  { code: "crystal", name: "Crystal", emoji: "💎", color: "#a5f3fc", mult: 2.5, weight: 4 },
+  { code: "rainbow", name: "Rainbow", emoji: "🎨", color: "#f0abfc", mult: 3, weight: 2 },
+  { code: "celestial", name: "Celestial", emoji: "🌌", color: "#c4b5fd", mult: 4, weight: 1 },
+  { code: "royal", name: "Royal", emoji: "👑", color: "#f0b12a", mult: 5, weight: 0.5 },
 ] as const;
 export type Variant = (typeof VARIANTS)[number]["code"];
 export const variantInfo = (code: string) => VARIANTS.find((v) => v.code === code) ?? VARIANTS[0];

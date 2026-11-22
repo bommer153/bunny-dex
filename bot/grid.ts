@@ -35,6 +35,8 @@ async function thumb(slug: string, w: number, h: number) {
  */
 type Tile = { slug: string; level?: number; card?: boolean; variant?: string };
 const CARD_H = 252; // portrait tile height (5:7 like a trading card)
+/** Where the card itself sits in a card picture (fractions; the rest is room for the glow), for the hunt reveal clip. */
+export const CARD_CROP = { left: 24 / (TILE + 2 * PAD), top: 24 / (CARD_H + 2 * PAD), width: 172 / (TILE + 2 * PAD), height: 244 / (CARD_H + 2 * PAD) };
 /** Where a tile's art goes (tile units): the square grid art, or the trading card's landscape window. */
 const artBox = (c: Tile, i: number) => {
   const [x, y] = at(i);
@@ -117,34 +119,32 @@ const DEFS = `<filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><fe
   <linearGradient id="velvet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#3b0764"/></linearGradient>
   <radialGradient id="vig"><stop offset=".45" stop-color="#0b0118" stop-opacity="0"/><stop offset="1" stop-color="#0b0118" stop-opacity=".85"/></radialGradient>`;
 
-/** Variant looks: a tint over the art, a layer on the card body (card pictures only) and the color of the variant's chip. */
+/** Variant looks: a tint over the art and a layer on the card body (card pictures only). Chip colors come from VARIANTS. */
 type Box = { x: number; y: number; w: number; h: number };
 const box = (b: Box, attrs: string, rx = 0) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${rx}" ${attrs}/>`;
 const STARS = Array.from({ length: 30 }, (_, k) => [((k * 37) % 160) + 4, ((k * 61) % 232) + 4, k % 3 ? 0.6 : 1.2]); // fixed starfield, body units
-const VARIANT_LOOK: Record<string, { color: string; art?: (a: Box) => string; body?: (b: Box) => string }> = {
-  foil: { color: "#7dd3fc", art: (a) => box(a, `fill="url(#holo)" opacity=".28"`) },
-  golden: { color: "#fbbf24", art: (a) => box(a, `fill="#f59e0b" opacity=".22"`), body: (b) => box(b, `fill="url(#gold)" opacity=".4"`, 10) },
-  shadow: { color: "#c084fc", art: (a) => box(a, `fill="url(#vig)"`), body: (b) => box(b, `fill="#05010d" opacity=".5"`, 10) },
+const VARIANT_LOOK: Record<string, { art?: (a: Box) => string; body?: (b: Box) => string }> = {
+  foil: { art: (a) => box(a, `fill="url(#holo)" opacity=".28"`) },
+  golden: { art: (a) => box(a, `fill="#f59e0b" opacity=".22"`), body: (b) => box(b, `fill="url(#gold)" opacity=".4"`, 10) },
+  shadow: { art: (a) => box(a, `fill="url(#vig)"`), body: (b) => box(b, `fill="#05010d" opacity=".5"`, 10) },
   crystal: {
-    color: "#a5f3fc",
     art: (a) => `${box(a, `fill="#cffafe" opacity=".22"`)}<path d="M${a.x} ${a.y}H${a.x + a.w * 0.45}L${a.x} ${a.y + a.h * 0.5}ZM${a.x + a.w} ${a.y + a.h}H${a.x + a.w * 0.5}L${a.x + a.w} ${a.y + a.h * 0.35}Z" fill="#fff" opacity=".35"/>`,
     body: (b) => box(b, `fill="#a5f3fc" opacity=".3"`, 10),
   },
-  rainbow: { color: "url(#holo)", art: (a) => box(a, `fill="url(#holo)" opacity=".16"`), body: (b) => box(b, `fill="url(#holo)" opacity=".32"`, 10) },
+  rainbow: { art: (a) => box(a, `fill="url(#holo)" opacity=".16"`), body: (b) => box(b, `fill="url(#holo)" opacity=".32"`, 10) },
   celestial: {
-    color: "#c4b5fd",
     art: (a) => box(a, `fill="#6366f1" opacity=".14"`),
     body: (b) => box(b, `fill="#1e1b4b" opacity=".5"`, 10) + STARS.map(([sx, sy, r]) => `<circle cx="${b.x + sx}" cy="${b.y + sy}" r="${r}" fill="#fff" opacity=".75"/>`).join(""),
   },
-  royal: { color: "#f0b12a", body: (b) => box(b, `fill="url(#velvet)" opacity=".55"`, 10) + box({ x: b.x + 3, y: b.y + 3, w: b.w - 6, h: b.h - 6 }, `fill="none" stroke="#f0b12a" stroke-width="1.2"`, 8) },
+  royal: { body: (b) => box(b, `fill="url(#velvet)" opacity=".55"`, 10) + box({ x: b.x + 3, y: b.y + 3, w: b.w - 6, h: b.h - 6 }, `fill="none" stroke="#f0b12a" stroke-width="1.2"`, 8) },
 };
 /** The variant's name on a chip in the art's top-left corner (bigger on the small grid tiles). */
 function variantChip(code: string, a: Box, k: number) {
-  const look = VARIANT_LOOK[code];
-  if (!look) return "";
+  if (!VARIANT_LOOK[code]) return "";
+  const color = code === "rainbow" ? "url(#holo)" : variantInfo(code).color;
   const name = variantInfo(code).name.toUpperCase(), w = (name.length * 5.4 + 10) * k, h = 11 * k;
-  return `<rect x="${a.x + 4}" y="${a.y + 4}" width="${w}" height="${h}" rx="${h / 2}" fill="#1e1030" fill-opacity=".85" stroke="${look.color}" stroke-width="${0.9 * k}"/>
-    <text x="${a.x + 4 + w / 2}" y="${a.y + 4 + h * 0.74}" ${T} font-size="${7 * k}" font-weight="bold" letter-spacing="${0.5 * k}" fill="${look.color}" text-anchor="middle">${name}</text>`;
+  return `<rect x="${a.x + 4}" y="${a.y + 4}" width="${w}" height="${h}" rx="${h / 2}" fill="#1e1030" fill-opacity=".85" stroke="${color}" stroke-width="${0.9 * k}"/>
+    <text x="${a.x + 4 + w / 2}" y="${a.y + 4 + h * 0.74}" ${T} font-size="${7 * k}" font-weight="bold" letter-spacing="${0.5 * k}" fill="${color}" text-anchor="middle">${name}</text>`;
 }
 const SPARKS = [[14, 16], [164, 26], [6, 104], [96, 5], [174, 80], [22, 170], [84, 176]]; // spots on the frame (tile coords), clear of the level badge
 const star = (cx: number, cy: number, r: number, k = r * 0.22) =>
