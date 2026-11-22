@@ -68,7 +68,7 @@ function cardFace(def: CardDef, x: number, y: number, a: ReturnType<typeof artBo
   const el = def.element, ec = ELEMENT_COLOR[el];
   const trait = TRAITS[el], traitName = trait.name.split(" ").slice(1).join(" "); // drop the emoji: no emoji font
   const text: string[] = [];
-  let ty = y + 178;
+  let ty = y + 166;
   const row = (name: string, desc: string) => {
     text.push(`<text x="${x + 14}" y="${ty}" ${T} font-size="10" font-weight="bold" fill="#fff">${esc(name)}</text>`);
     for (const l of wrap(desc, 40)) text.push(`<text x="${x + 14}" y="${(ty += 10)}" ${T} font-size="8" fill="#e9defc">${esc(l)}</text>`);
@@ -84,14 +84,15 @@ function cardFace(def: CardDef, x: number, y: number, a: ReturnType<typeof artBo
   }
   const stat = (k: number, label: string, v: number) =>
     `<text x="${x + 40 + k * 52}" y="${y + 240.5}" ${T} font-size="7" font-weight="bold" fill="#a78bfa" text-anchor="end">${label}</text><text x="${x + 43 + k * 52}" y="${y + 241}" ${T} font-size="10" font-weight="bold" fill="#fff">${v}</text>`;
-  const under = `<linearGradient id="bg-${def.slug}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ec}" stop-opacity=".5"/><stop offset=".5" stop-color="#2a1545"/><stop offset="1" stop-color="#1a0d2e"/></linearGradient>
+  // Background: element color at the top fading into the rarity color at the bottom, over the dark card base.
+  const rc = hex(RARITY_COLOR[rarity]);
+  const under = `<linearGradient id="bg-${def.slug}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ec}" stop-opacity=".55"/><stop offset=".5" stop-color="${ec}" stop-opacity=".08"/><stop offset=".55" stop-color="${rc}" stop-opacity=".08"/><stop offset="1" stop-color="${rc}" stop-opacity=".45"/></linearGradient>
+    <rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${CARD_H - 12}" rx="10" fill="#1a0d2e"/>
     <rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${CARD_H - 12}" rx="10" fill="url(#bg-${def.slug})"/>`;
   const over = `<rect x="${a.x + 0.5}" y="${a.y + 0.5}" width="${a.w - 1}" height="${a.h - 1}" rx="3" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width=".8"/>
     <text x="${x + 13}" y="${y + 25}" ${T} font-size="${Math.min(14, 108 / (def.name.length * 0.6)).toFixed(1)}" font-weight="bold" fill="#fff">${esc(def.name)}</text>
     <g transform="translate(${x + 134} ${y + 20})"><circle r="10.5" fill="#1e1030" stroke="${stroke}" stroke-width="1"/><image href="${badgeHref(rarity)}" x="-8.5" y="-8.5" width="17" height="17"/></g>
     <g transform="translate(${x + 158} ${y + 20})"><circle r="10.5" fill="${ec}" stroke="#fff" stroke-width="1"/><g fill="#1e1030">${ELEMENT_ICON[el]}</g></g>
-    <rect x="${x + 14}" y="${a.y + a.h + 6}" width="${TILE - 28}" height="13" rx="6.5" fill="${ec}" fill-opacity=".18" stroke="${ec}" stroke-opacity=".5"/>
-    <text x="${x + 90}" y="${a.y + a.h + 15.5}" ${T} font-size="7.5" font-weight="bold" fill="${ec}" text-anchor="middle">${cap(rarity)} ${cap(el)} bunny</text>
     ${text.join("")}
     <rect x="${x + 10}" y="${y + 229}" width="${TILE - 20}" height="16" rx="8" fill="#000" fill-opacity=".3"/>
     ${stat(0, "ATK", def.atk)}${stat(1, "DEF", def.def)}${stat(2, "HP", def.hp)}`;
