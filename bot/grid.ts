@@ -86,9 +86,9 @@ function cardFace(def: CardDef, x: number, y: number, a: ReturnType<typeof artBo
   }
   const stat = (k: number, label: string, v: number) =>
     `<text x="${x + 40 + k * 52}" y="${y + 240.5}" ${T} font-size="7" font-weight="bold" fill="#a78bfa" text-anchor="end">${label}</text><text x="${x + 43 + k * 52}" y="${y + 241}" ${T} font-size="10" font-weight="bold" fill="#fff">${v}</text>`;
-  // Background: element color at the top fading into the rarity color at the bottom, over the dark card base.
+  // Background: rarity color at the top (behind the name and rarity badge) fading into the element color at the bottom.
   const rc = hex(RARITY_COLOR[rarity]);
-  const under = `<linearGradient id="bg-${def.slug}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ec}" stop-opacity=".55"/><stop offset=".5" stop-color="${ec}" stop-opacity=".08"/><stop offset=".55" stop-color="${rc}" stop-opacity=".08"/><stop offset="1" stop-color="${rc}" stop-opacity=".45"/></linearGradient>
+  const under = `<linearGradient id="bg-${def.slug}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${rc}" stop-opacity=".55"/><stop offset=".5" stop-color="${rc}" stop-opacity=".08"/><stop offset=".55" stop-color="${ec}" stop-opacity=".08"/><stop offset="1" stop-color="${ec}" stop-opacity=".45"/></linearGradient>
     <rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${CARD_H - 12}" rx="10" fill="#1a0d2e"/>
     <rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${CARD_H - 12}" rx="10" fill="url(#bg-${def.slug})"/>`;
   const over = `<rect x="${a.x + 0.5}" y="${a.y + 0.5}" width="${a.w - 1}" height="${a.h - 1}" rx="3" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width=".8"/>
@@ -116,27 +116,31 @@ const DEFS = `<filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><fe
   <radialGradient id="spark"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
   <linearGradient id="holo" x1="0" y1="0" x2="1" y2="1">${HOLO}</linearGradient>
   <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset=".5" stop-color="#d97706"/><stop offset="1" stop-color="#fde68a"/></linearGradient>
-  <linearGradient id="velvet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#3b0764"/></linearGradient>
   <radialGradient id="vig"><stop offset=".45" stop-color="#0b0118" stop-opacity="0"/><stop offset="1" stop-color="#0b0118" stop-opacity=".85"/></radialGradient>`;
 
-/** Variant looks: a tint over the art and a layer on the card body (card pictures only). Chip colors come from VARIANTS. */
+/**
+ * Variant looks: a tint over the art and a layer on the card body (card pictures only). Chip colors come from VARIANTS.
+ * Body layers only decorate (inner rim, stars, darkening), never recolor: the body's colors mean element and rarity,
+ * and a colored variant fill made e.g. a royal uncommon look epic.
+ */
 type Box = { x: number; y: number; w: number; h: number };
 const box = (b: Box, attrs: string, rx = 0) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${rx}" ${attrs}/>`;
+const rim = (b: Box, stroke: string, width = 1.2) => box({ x: b.x + 3, y: b.y + 3, w: b.w - 6, h: b.h - 6 }, `fill="none" stroke="${stroke}" stroke-width="${width}"`, 8);
 const STARS = Array.from({ length: 30 }, (_, k) => [((k * 37) % 160) + 4, ((k * 61) % 232) + 4, k % 3 ? 0.6 : 1.2]); // fixed starfield, body units
 const VARIANT_LOOK: Record<string, { art?: (a: Box) => string; body?: (b: Box) => string }> = {
   foil: { art: (a) => box(a, `fill="url(#holo)" opacity=".28"`) },
-  golden: { art: (a) => box(a, `fill="#f59e0b" opacity=".22"`), body: (b) => box(b, `fill="url(#gold)" opacity=".4"`, 10) },
+  golden: { art: (a) => box(a, `fill="#f59e0b" opacity=".22"`), body: (b) => rim(b, "url(#gold)", 1.5) },
   shadow: { art: (a) => box(a, `fill="url(#vig)"`), body: (b) => box(b, `fill="#05010d" opacity=".5"`, 10) },
   crystal: {
     art: (a) => `${box(a, `fill="#cffafe" opacity=".22"`)}<path d="M${a.x} ${a.y}H${a.x + a.w * 0.45}L${a.x} ${a.y + a.h * 0.5}ZM${a.x + a.w} ${a.y + a.h}H${a.x + a.w * 0.5}L${a.x + a.w} ${a.y + a.h * 0.35}Z" fill="#fff" opacity=".35"/>`,
-    body: (b) => box(b, `fill="#a5f3fc" opacity=".3"`, 10),
+    body: (b) => rim(b, "#a5f3fc"),
   },
-  rainbow: { art: (a) => box(a, `fill="url(#holo)" opacity=".16"`), body: (b) => box(b, `fill="url(#holo)" opacity=".32"`, 10) },
+  rainbow: { art: (a) => box(a, `fill="url(#holo)" opacity=".16"`), body: (b) => rim(b, "url(#holo)", 1.5) },
   celestial: {
     art: (a) => box(a, `fill="#6366f1" opacity=".14"`),
-    body: (b) => box(b, `fill="#1e1b4b" opacity=".5"`, 10) + STARS.map(([sx, sy, r]) => `<circle cx="${b.x + sx}" cy="${b.y + sy}" r="${r}" fill="#fff" opacity=".75"/>`).join(""),
+    body: (b) => STARS.map(([sx, sy, r]) => `<circle cx="${b.x + sx}" cy="${b.y + sy}" r="${r}" fill="#fff" opacity=".75"/>`).join(""),
   },
-  royal: { body: (b) => box(b, `fill="url(#velvet)" opacity=".55"`, 10) + box({ x: b.x + 3, y: b.y + 3, w: b.w - 6, h: b.h - 6 }, `fill="none" stroke="#f0b12a" stroke-width="1.2"`, 8) },
+  royal: { body: (b) => rim(b, "#f0b12a", 2) },
 };
 /** The variant's name on a chip in the art's top-left corner (bigger on the small grid tiles). */
 function variantChip(code: string, a: Box, k: number) {

@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/with-fonts.mjs next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/with-fonts.mjs next start",
     "lint": "eslint",
-    "bot": "tsx bot/index.ts",
-    "bot:dev": "tsx watch bot/index.ts",
+    "bot": "node scripts/with-fonts.mjs tsx bot/index.ts",
+    "bot:dev": "node scripts/with-fonts.mjs tsx watch bot/index.ts",
     "test": "node --import tsx --test game/rules.test.ts game/economy.test.ts bot/guide.test.ts bot/media.test.ts"
   },
   "dependencies": {
