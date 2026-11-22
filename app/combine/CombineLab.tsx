@@ -8,8 +8,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent }
 import { RARITIES, getCard, type Rarity } from "@/game/data/cards";
 import { COMBINE_CHANCE, COMBINE_COUNT, RARITY_EMOJI, variantInfo } from "@/game/config";
 import { combinePlay } from "../actions";
-import CardStage from "../CardStage";
-import { panel } from "../components";
+import { CardTile, panel } from "../components";
 import { reducedMotion } from "../fx/stage";
 import { useConfirmed, useLock } from "../fx/useConfirmed";
 
@@ -252,7 +251,7 @@ export default function CombineLab({ cards, spare }: { cards: LabCard[]; spare: 
           <div className="relative flex flex-col items-center gap-3 text-center">
             {outcome.success ? (
               <>
-                <div className="gold-frame w-56 sm:w-64"><div className="gold-frame-inner p-2"><CardStage key={outcome.card.code} slug={outcome.card.slug} name={outcome.name} rarity={outcome.rarity} variant={outcome.card.variant} skip={skipped} /></div></div>
+                <div className="w-48 sm:w-56 anim-pop"><CardTile key={outcome.card.code} slug={outcome.card.slug} variant={outcome.card.variant} level={outcome.card.level} code={outcome.card.code} tilt preview /></div>
                 <p className="text-xl font-semibold anim-pop text-goldfoil">
                   🧪✨ {RARITY_EMOJI[outcome.rarity]} {outcome.card.variant !== "normal" && `${variantInfo(outcome.card.variant).name} `}{outcome.name}
                 </p>
