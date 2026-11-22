@@ -29,7 +29,7 @@ test("clover raises rare+ rate", () => {
     return n / 20000;
   };
   const base = rate(false), boosted = rate(true);
-  assert.ok(base > 0.05 && base < 0.09, `base ${base}`);
+  assert.ok(base > 0.035 && base < 0.06, `base ${base}`); // 4.7% rare+
   assert.ok(boosted > base * 1.6, `boosted ${boosted} vs ${base}`);
 });
 
