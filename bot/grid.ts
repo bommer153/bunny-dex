@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { AttachmentBuilder } from "discord.js";
-import { CARDS, RARITIES, getCard, type Element, type Rarity } from "../game/data/cards";
+import { CARDS, RARITIES, getCard, type CardDef, type Element, type Rarity } from "../game/data/cards";
+import { TRAITS } from "../game/config";
 import { RARITY_COLOR, cardPics } from "./ui";
 
 // The server has no fonts installed (badge text came out as □ boxes): use the bot's own. Set before the first text is drawn.
@@ -18,23 +19,85 @@ const GIF_SCALE = 0.6; // GIF encoding is the slow part; Discord shows embed ima
 const CARD_SCALE = { png: 2.5, gif: 2 }; // card pictures: 550 px, 440 px when animated (GIF size grows fast)
 const thumbs = new Map<string, Buffer>(); // grid-size art per card, reused across requests (54 cards × ~20 KB)
 
-async function thumb(slug: string, size: number) {
-  const cached = size === ART ? thumbs.get(slug) : undefined; // only the grid size repeats; card pictures are drawn once
+/** The card art scaled to cover w×h (center crop). */
+async function thumb(slug: string, w: number, h: number) {
+  const grid = w === ART && h === ART; // only the grid size repeats; card pictures are drawn once
+  const cached = grid ? thumbs.get(slug) : undefined;
   if (cached) return cached;
-  const t = await sharp(path.join(process.cwd(), "public", "cards", `${slug}.png`)).resize(size, size).png().toBuffer();
-  if (size === ART) thumbs.set(slug, t);
+  const t = await sharp(path.join(process.cwd(), "public", "cards", `${slug}.png`)).resize(w, h).png().toBuffer();
+  if (grid) thumbs.set(slug, t);
   return t;
 }
 
 /**
  * A card on the page: a square tile with its level in the corner, or with `card` set (card pictures) a portrait
- * trading card: rarity gem in the art's corner, then a name plate with the bunny's name and element chip.
+ * trading card: name + element icon, art window with a round rarity badge, info strip, trait/ability/flavor text, stats.
  */
 type Tile = { slug: string; level?: number; card?: boolean };
-const CARD_H = 252; // portrait tile height (5:7 like a trading card); the art stays square on top
-const ELEMENT_COLOR: Record<Element, string> = {
-  fire: "#f97316", water: "#38bdf8", nature: "#4ade80", electric: "#facc15", ice: "#a5f3fc", shadow: "#a78bfa", light: "#fde68a",
+const CARD_H = 252; // portrait tile height (5:7 like a trading card)
+/** Where a tile's art goes (tile units): the square grid art, or the trading card's landscape window. */
+const artBox = (c: Tile, i: number) => {
+  const [x, y] = at(i);
+  return c.card ? { x: x + 12, y: y + 34, w: 156, h: 112 } : { x: x + 6, y: y + 6, w: ART, h: ART };
 };
+const ELEMENT_COLOR: Record<Element, string> = {
+  fire: "#fb923c", water: "#38bdf8", nature: "#4ade80", electric: "#facc15", ice: "#a5f3fc", shadow: "#a78bfa", light: "#fde68a",
+};
+/** Element glyphs drawn around (0,0) within ±6, for the round element icon (no emoji font on the server). */
+const ELEMENT_ICON: Record<Element, string> = {
+  fire: `<path d="M0-6.5C3.5-2.5 5.5 0 4.5 3.2 3.6 6.2-3.6 6.2-4.5 3.2-5.3.5-3-1-2-3.2-1 0 0 .3.4-1.5Z"/>`,
+  water: `<path d="M0-6.5C3-2.5 5 .5 5 2.8A5 5 0 0 1-5 2.8C-5 .5-3-2.5 0-6.5Z"/>`,
+  nature: `<path d="M-5.5 5.5C-6-2 .5-6 6-6 6.5 1.5 1 6-5.5 5.5Z"/><path d="M-5.5 5.5 2.5-2.5" stroke="#fff" stroke-opacity=".7" stroke-width="1.2" fill="none"/>`,
+  electric: `<path d="M1.5-7-4.5 1H0L-1.5 7 4.5-1H0Z"/>`,
+  ice: `<path d="M0-6.5V6.5M-5.6-3.25 5.6 3.25M-5.6 3.25 5.6-3.25" stroke="#1e1030" stroke-width="2" stroke-linecap="round" fill="none"/>`,
+  shadow: `<path d="M1.5-6.3A6.5 6.5 0 1 0 6.3 1.5 5 5 0 1 1 1.5-6.3Z"/>`,
+  light: `<circle r="3"/><path d="M0-6.5V-4.8M0 4.8V6.5M-6.5 0H-4.8M4.8 0H6.5M-4.6-4.6-3.4-3.4M3.4 3.4 4.6 4.6M-4.6 4.6-3.4 3.4M3.4-3.4 4.6-4.6" stroke="#1e1030" stroke-width="1.6" stroke-linecap="round"/>`,
+};
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/** Word-wraps to lines of at most `max` characters (SVG text doesn't wrap). */
+const wrap = (s: string, max: number) =>
+  s.split(" ").reduce<string[]>((ls, w) => (ls.length && (ls[ls.length - 1] + " " + w).length <= max ? [...ls.slice(0, -1), ls[ls.length - 1] + " " + w] : [...ls, w]), []);
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+const T = `font-family="Geist, sans-serif"`;
+
+/**
+ * The trading-card face (tile units, origin x,y) as layers under and over the art: element-tinted body, name and
+ * round element icon, art window, info strip, trait/ability rows, flavor text (when it fits) and base stats.
+ */
+function cardFace(def: CardDef, x: number, y: number, a: ReturnType<typeof artBox>, stroke: string, rarity: Rarity) {
+  const el = def.element, ec = ELEMENT_COLOR[el];
+  const trait = TRAITS[el], traitName = trait.name.split(" ").slice(1).join(" "); // drop the emoji: no emoji font
+  const text: string[] = [];
+  let ty = y + 178;
+  const row = (name: string, desc: string) => {
+    text.push(`<text x="${x + 14}" y="${ty}" ${T} font-size="10" font-weight="bold" fill="#fff">${esc(name)}</text>`);
+    for (const l of wrap(desc, 40)) text.push(`<text x="${x + 14}" y="${(ty += 10)}" ${T} font-size="8" fill="#e9defc">${esc(l)}</text>`);
+    ty += 13;
+  };
+  row(`${traitName} · trait`, cap(trait.desc));
+  for (const ab of def.abilities ?? []) row(ab.name, ab.description);
+  // Flavor text sits just above the stats; the embed repeats the description, so it gives way when an ability needs the room.
+  const flavor = wrap(def.description, 46).slice(0, 2), fy = y + 222 - (flavor.length - 1) * 8.5;
+  if (ty - 4 <= fy - 10) {
+    text.push(`<path d="M${x + 24} ${fy - 10}H${x + 156}" stroke="#fff" stroke-opacity=".15"/>`);
+    flavor.forEach((l, k) => text.push(`<text x="${x + 90}" y="${fy + k * 8.5}" ${T} font-size="7" fill="#c4b5fd" text-anchor="middle">${esc(l)}</text>`));
+  }
+  const stat = (k: number, label: string, v: number) =>
+    `<text x="${x + 40 + k * 52}" y="${y + 240.5}" ${T} font-size="7" font-weight="bold" fill="#a78bfa" text-anchor="end">${label}</text><text x="${x + 43 + k * 52}" y="${y + 241}" ${T} font-size="10" font-weight="bold" fill="#fff">${v}</text>`;
+  const under = `<linearGradient id="bg-${def.slug}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ec}" stop-opacity=".5"/><stop offset=".5" stop-color="#2a1545"/><stop offset="1" stop-color="#1a0d2e"/></linearGradient>
+    <rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${CARD_H - 12}" rx="10" fill="url(#bg-${def.slug})"/>`;
+  const over = `<rect x="${a.x - 1.5}" y="${a.y - 1.5}" width="${a.w + 3}" height="${a.h + 3}" rx="4" fill="none" stroke="${stroke}" stroke-width="3"/>
+    <rect x="${a.x + 1}" y="${a.y + 1}" width="${a.w - 2}" height="${a.h - 2}" rx="3" fill="none" stroke="#fff" stroke-opacity=".35"/>
+    <text x="${x + 13}" y="${y + 25}" ${T} font-size="14" font-weight="bold" fill="#fff">${esc(def.name)}</text>
+    <g transform="translate(${x + 158} ${y + 20})"><circle r="10.5" fill="${ec}" stroke="#fff" stroke-width="1.5"/><g fill="#1e1030">${ELEMENT_ICON[el]}</g></g>
+    <g transform="translate(${a.x + a.w - 16} ${a.y + a.h - 16})"><circle r="13.5" fill="#1e1030" stroke="${stroke}" stroke-width="2.5"/><image href="${badgeHref(rarity)}" x="-11.5" y="-11.5" width="23" height="23"/></g>
+    <rect x="${x + 14}" y="${a.y + a.h + 6}" width="${TILE - 28}" height="13" rx="6.5" fill="${ec}" fill-opacity=".18" stroke="${ec}" stroke-opacity=".5"/>
+    <text x="${x + 90}" y="${a.y + a.h + 15.5}" ${T} font-size="7.5" font-weight="bold" fill="${ec}" text-anchor="middle">${cap(rarity)} ${cap(el)} bunny</text>
+    ${text.join("")}
+    <rect x="${x + 10}" y="${y + 229}" width="${TILE - 20}" height="16" rx="8" fill="#000" fill-opacity=".3"/>
+    ${stat(0, "ATK", def.atk)}${stat(1, "DEF", def.def)}${stat(2, "HP", def.hp)}`;
+  return { under, over };
+}
 const badges = new Map<Rarity, string>(); // the rarity emoji PNGs (public/emojis) as data URIs for the SVG
 const badgeHref = (r: Rarity) => {
   if (!badges.has(r)) badges.set(r, `data:image/png;base64,${readFileSync(path.join(process.cwd(), "public", "emojis", `bunnydex_rarity_${r}.png`)).toString("base64")}`);
@@ -57,10 +120,10 @@ const star = (cx: number, cy: number, r: number, k = r * 0.22) =>
  * One frame of rarity effects (t = 0..1 through the loop) as SVG  under and over the card art.
  * Effects stack with rarity: rare glows, epic adds glass, legendary pulses with a shine sweep, mythic sparkles, secret gets a holo frame.
  */
-export function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
+function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
   let defs = DEFS, under = "", over = "";
   list.forEach((c, i) => {
-    const [x, y] = at(i), ax = x + 6, ay = y + 6, th = c.card ? CARD_H : TILE;
+    const [x, y] = at(i), a = artBox(c, i), th = c.card ? CARD_H : TILE;
     const def = getCard(c.slug), rarity = def.rarity, rank = RANK[rarity];
     const p = (t + i * 0.17) % 1; // per-card offset so the page doesn't move in lockstep
     const wave = rank >= RANK.legendary ? 0.5 + 0.5 * Math.sin(p * 2 * Math.PI) : 0.5;
@@ -70,22 +133,19 @@ export function effects(list: Tile[], t: number, W: number, H: number, scale: nu
       stroke = `url(#h${i})`;
     }
     if (rank >= RANK.rare) under += `<rect x="${x + 4}" y="${y + 4}" width="${TILE - 8}" height="${th - 8}" rx="14" fill="none" stroke="${stroke}" stroke-width="${rank * 3 + wave * 8}" opacity="${0.3 + rank * 0.08 + wave * 0.2}" filter="url(#blur)"/>`;
+    const face = c.card ? cardFace(def, x, y, a, stroke, rarity) : null;
+    if (face) under += face.under;
     if (rank >= RANK.epic) {
       // Glass: a gloss over the art and a bright inner edge; legendary+ also gets a light sweep across it.
-      const sweep = ax - 90 + p * 1.8 * (ART + 140);
-      defs += `<clipPath id="c${i}"><rect x="${ax}" y="${ay}" width="${ART}" height="${ART}" rx="10"/></clipPath>`;
-      over += `<g clip-path="url(#c${i})"><rect x="${ax}" y="${ay}" width="${ART}" height="${ART}" fill="url(#glass)"/>${rank >= RANK.legendary ? `<rect x="${sweep}" y="${ay - 40}" width="44" height="${ART + 80}" fill="url(#shine)" transform="rotate(20 ${sweep + 22} ${ay + ART / 2})"/>` : ""}</g>`;
-      over += `<rect x="${ax + 2}" y="${ay + 2}" width="${ART - 4}" height="${ART - 4}" rx="9" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/>`;
+      const sweep = a.x - 90 + p * 1.8 * (a.w + 140);
+      defs += `<clipPath id="c${i}"><rect x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" rx="${c.card ? 3 : 10}"/></clipPath>`;
+      over += `<g clip-path="url(#c${i})"><rect x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="url(#glass)"/>${rank >= RANK.legendary ? `<rect x="${sweep}" y="${a.y - 40}" width="44" height="${a.h + 80}" fill="url(#shine)" transform="rotate(20 ${sweep + 22} ${a.y + a.h / 2})"/>` : ""}</g>`;
+      if (!c.card) over += `<rect x="${a.x + 2}" y="${a.y + 2}" width="${a.w - 4}" height="${a.h - 4}" rx="9" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/>`;
     }
-    if (c.card) {
-      // Name plate under the art: a divider in the rarity color, the name, and an element chip (dot + name; no emoji font on the server).
-      const el = def.element, label = el[0].toUpperCase() + el.slice(1), cw = Math.round(label.length * 7.6 + 30), cx = x + TILE / 2 - cw / 2;
-      over += `<rect x="${ax}" y="${ay + ART}" width="${ART}" height="${th - ART - 12}" fill="#1e1030"/>
-        <rect x="${ax}" y="${ay + ART - 1}" width="${ART}" height="3" fill="${stroke}"/>
-        <text x="${x + TILE / 2}" y="${ay + ART + 27}" font-family="Geist, sans-serif" font-size="17" font-weight="bold" fill="#fff" text-anchor="middle">${def.name}</text>
-        <rect x="${cx}" y="${ay + ART + 38}" width="${cw}" height="22" rx="11" fill="${ELEMENT_COLOR[el]}" fill-opacity=".18" stroke="${ELEMENT_COLOR[el]}" stroke-width="1.5"/>
-        <circle cx="${cx + 13}" cy="${ay + ART + 49}" r="4.5" fill="${ELEMENT_COLOR[el]}"/>
-        <text x="${cx + 22}" y="${ay + ART + 54}" font-family="Geist, sans-serif" font-size="13" font-weight="bold" fill="${ELEMENT_COLOR[el]}">${label}</text>`;
+    if (face) {
+      // Every card is glassy: a soft diagonal gloss over the whole face and a bright inner rim.
+      over += `${face.over}<rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${th - 12}" rx="10" fill="url(#glass)" opacity=".55"/>
+        <rect x="${x + 7.5}" y="${y + 7.5}" width="${TILE - 15}" height="${th - 15}" rx="9" fill="none" stroke="#fff" stroke-opacity=".3"/>`;
     }
     over += `<rect x="${x + 3}" y="${y + 3}" width="${TILE - 6}" height="${th - 6}" rx="14" fill="none" stroke="${stroke}" stroke-width="6"/>`;
     if (rank >= RANK.mythic) {
@@ -97,10 +157,8 @@ export function effects(list: Tile[], t: number, W: number, H: number, scale: nu
         over += `<circle cx="${sx}" cy="${sy}" r="${6 + v * 8}" fill="url(#spark)" opacity="${v}"/><path d="${star(sx, sy, 3 + v * 8)}" fill="#fff" opacity="${v}"/>`;
       }
     }
-    // Corner badge last so sparkles never cover it.
-    over += c.card
-      ? `<image href="${badgeHref(rarity)}" x="${x + TILE - 54}" y="${y + TILE - 54}" width="46" height="46"/>`
-      : `<rect x="${x + TILE - 62}" y="${y + TILE - 34}" width="54" height="26" rx="8" fill="#1e1030" stroke="${stroke}" stroke-width="2"/>
+    // Level badge last so sparkles never cover it (card pictures show stats instead).
+    if (!c.card) over += `<rect x="${x + TILE - 62}" y="${y + TILE - 34}" width="54" height="26" rx="8" fill="#1e1030" stroke="${stroke}" stroke-width="2"/>
       <text x="${x + TILE - 35}" y="${y + TILE - 15}" font-family="Geist, sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">Lv ${c.level}</text>`;
   });
   const svg = (body: string) => Buffer.from(`<svg width="${Math.round(W * scale)}" height="${Math.round(H * scale)}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`);
@@ -111,12 +169,15 @@ export function effects(list: Tile[], t: number, W: number, H: number, scale: nu
  * Tiles (laid out in a W×H tile-unit page) in rarity-colored frames with badges and rarity effects.
  * A looping GIF if any card is legendary+, otherwise a PNG, each drawn at its scale.
  */
-export async function render(list: Tile[], W: number, H: number, scale: { png: number; gif: number }) {
+async function render(list: Tile[], W: number, H: number, scale: { png: number; gif: number }) {
   const animated = list.some((c) => RANK[getCard(c.slug).rarity] >= RANK.legendary);
   const s = animated ? scale.gif : scale.png, w = Math.round(W * s), h = Math.round(H * s), up = Math.ceil(s);
   // The art goes on its own layer once (at a whole-number scale so tiles land on exact pixels); every frame reuses it between its effect layers.
   const tiles = await sharp({ create: { width: W * up, height: H * up, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite(await Promise.all(list.map(async (c, i) => ({ input: await thumb(c.slug, ART * up), left: (at(i)[0] + 6) * up, top: (at(i)[1] + 6) * up }))))
+    .composite(await Promise.all(list.map(async (c, i) => {
+      const a = artBox(c, i);
+      return { input: await thumb(c.slug, a.w * up, a.h * up), left: a.x * up, top: a.y * up };
+    })))
     .raw().toBuffer();
   const art = await sharp(tiles, { raw: { width: W * up, height: H * up, channels: 4 } }).resize(w, h).png().toBuffer();
   const frame = (t: number) => {
