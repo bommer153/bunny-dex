@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CARDS, RARITIES, getCard, type Rarity } from "@/game/data/cards";
-import { RARITY_EMOJI, variantInfo } from "@/game/config";
+import { RARITY_EMOJI, variantInfo, variantTag } from "@/game/config";
 import { cardStats } from "@/game/rules";
 import CardPreview from "./CardPreview";
 
@@ -31,20 +31,32 @@ export function CardTile({ slug, variant = "normal", level = 1, code, status, hr
   // Art is full-bleed (has a background), so a pure-black silhouette is just a black square; a dark blur teases the bunny instead.
   const art = missing
     ? <div className="overflow-hidden rounded-lg"><Image src={`/cards/${slug}.png`} alt="Not caught yet" width={240} height={336} className="h-auto w-full scale-110 blur-[6px] brightness-[0.35] grayscale" /></div>
-    : <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={336} className="w-full h-auto rounded-lg" />;
+    : (
+      <div className="relative rounded-lg">
+        <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={336} className="w-full h-auto rounded-lg" />
+        {variant !== "normal" && (
+          <>
+            <div className={`vfx vfx-${variant}`} aria-hidden />
+            <span className={`vchip-${variant} absolute left-1.5 top-1.5 rounded-full border border-current bg-plum-950/85 px-1.5 text-[9px] font-bold uppercase leading-4 tracking-wider sm:text-[10px]`}>
+              {variantInfo(variant).name}
+            </span>
+          </>
+        )}
+      </div>
+    );
   const stats = `Lv ${level} · ⚔️${s.atk} 🛡️${s.def} ❤️${s.hp} · ${def.element}`;
   const top = preview
     ? <CardPreview slug={slug} name={def.name} rarity={def.rarity} variant={variant} stats={stats} code={code}>{art}</CardPreview>
     : href ? <Link href={href}>{art}</Link> : art;
   return (
     <div
-      className={`card-tile rounded-xl bg-plum-900 p-2 sm:p-3 ring-2 ${RARITY_RING[def.rarity]} flex flex-col gap-2 ${SHINY.has(def.rarity) ? "card-shine" : ""} ${tilt ? "tilt" : ""} ${index !== undefined ? "anim-rise" : ""}`}
+      className={`card-tile rounded-xl bg-plum-900 ${missing ? "" : `vbg-${variant}`} p-2 sm:p-3 ring-2 ${RARITY_RING[def.rarity]} flex flex-col gap-2 ${SHINY.has(def.rarity) ? "card-shine" : ""} ${tilt ? "tilt" : ""} ${index !== undefined ? "anim-rise" : ""}`}
       style={index !== undefined ? { animationDelay: `${Math.min(index, 12) * 35}ms` } : undefined}
     >
       {top}
       <div>
         <div className={`text-sm font-semibold leading-tight sm:text-base ${RARITY_TEXT[def.rarity]}`}>
-          {RARITY_EMOJI[def.rarity]} {missing ? "???" : <>{variant !== "normal" && `${variantInfo(variant).name} `}{def.name}</>}
+          {RARITY_EMOJI[def.rarity]} {missing ? "???" : <>{variantTag(variant)}{def.name}</>}
         </div>
         <div className="text-[11px] text-plum-400 sm:text-xs">
           {missing ? `Not caught yet · ${def.element}` : stats}

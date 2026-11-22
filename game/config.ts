@@ -121,9 +121,9 @@ export const VARIANTS = [
   { code: "normal", name: "Normal", emoji: "", mult: 1, weight: 100 },
   { code: "foil", name: "Foil", emoji: "✨", mult: 1.5, weight: 12 },
   { code: "golden", name: "Golden", emoji: "🌟", mult: 2, weight: 6 },
-  { code: "shadow", name: "Shadow", emoji: "🌑", mult: 2.2, weight: 5 },
+  { code: "shadow", name: "Shadow", emoji: "🖤", mult: 2.2, weight: 5 },
   { code: "crystal", name: "Crystal", emoji: "💎", mult: 2.5, weight: 4 },
-  { code: "rainbow", name: "Rainbow", emoji: "🌈", mult: 3, weight: 2 },
+  { code: "rainbow", name: "Rainbow", emoji: "🎨", mult: 3, weight: 2 },
   { code: "celestial", name: "Celestial", emoji: "🌌", mult: 4, weight: 1 },
   { code: "royal", name: "Royal", emoji: "👑", mult: 5, weight: 0.5 },
 ] as const;

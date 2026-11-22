@@ -27,6 +27,7 @@ export async function claimAchievements(discordId: string) {
 /** Every achievement with the player's progress toward it. */
 export async function achievementBoard(discordId: string) {
   const { have, stats } = await load(discordId);
-  const rows = ACHIEVEMENTS.map((a) => ({ ...a, done: have.includes(a.id), progress: Math.min(stats[a.stat], a.goal) }));
+  // Reached counts as done even before claimAchievements pays it: on the web the page renders alongside the layout that pays.
+  const rows = ACHIEVEMENTS.map((a) => ({ ...a, done: have.includes(a.id) || stats[a.stat] >= a.goal, progress: Math.min(stats[a.stat], a.goal) }));
   return { rows, done: rows.filter((r) => r.done).length, total: rows.length };
 }

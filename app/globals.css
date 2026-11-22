@@ -94,6 +94,22 @@ button:not(:disabled):active { transform: scale(0.95); }
   background: linear-gradient(110deg, transparent 35%, rgb(255 255 255 / 0.18) 50%, transparent 65%) 0 0 / 200% 100%;
   animation: shimmer 3.5s linear infinite;
 }
+/* Card variants, same looks as the bot's card pictures (VARIANT_LOOK in bot/grid.ts): .vfx-* tints the art, .vbg-* the tile, .vchip-* colors the name chip. */
+.vfx { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+.vfx-foil { background: linear-gradient(135deg, #f87171, #facc15, #4ade80, #22d3ee, #818cf8, #f0abfc); opacity: 0.28; }
+.vfx-golden { background: #f59e0b; opacity: 0.22; }
+.vfx-shadow { background: radial-gradient(circle, transparent 45%, rgb(11 1 24 / 0.85)); }
+.vfx-crystal { background: linear-gradient(135deg, rgb(255 255 255 / 0.35) 22%, transparent 22.5%), linear-gradient(315deg, rgb(255 255 255 / 0.35) 17%, transparent 17.5%), rgb(207 250 254 / 0.22); }
+.vfx-rainbow { background: linear-gradient(135deg, #f87171, #facc15, #4ade80, #22d3ee, #818cf8, #f0abfc); opacity: 0.16; }
+.vfx-celestial { background: #6366f1; opacity: 0.14; }
+.vbg-golden { background: linear-gradient(135deg, rgb(253 230 138 / 0.3), rgb(217 119 6 / 0.3), rgb(253 230 138 / 0.3)), #1e1030; }
+.vbg-shadow { background: #0d0618; }
+.vbg-crystal { background: linear-gradient(rgb(165 243 252 / 0.18), rgb(165 243 252 / 0.18)), #1e1030; }
+.vbg-rainbow { background: linear-gradient(135deg, rgb(248 113 113 / 0.25), rgb(250 204 21 / 0.25), rgb(74 222 128 / 0.25), rgb(34 211 238 / 0.25), rgb(129 140 248 / 0.25), rgb(240 171 252 / 0.25)), #1e1030; }
+.vbg-celestial { background: radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 70% 30%, #fff, transparent), radial-gradient(1.5px 1.5px at 40% 70%, #fff, transparent), radial-gradient(1px 1px at 85% 82%, #fff, transparent), radial-gradient(1px 1px at 22% 90%, #fff, transparent), radial-gradient(1.5px 1.5px at 92% 55%, #fff, transparent), #1b1440; }
+.vbg-royal { background: linear-gradient(rgb(124 58 237 / 0.45), rgb(59 7 100 / 0.6)), #1e1030; box-shadow: inset 0 0 0 1.5px rgb(240 177 42 / 0.8); }
+.vchip-foil { color: #7dd3fc; } .vchip-golden { color: #fbbf24; } .vchip-shadow { color: #c084fc; } .vchip-crystal { color: #a5f3fc; }
+.vchip-rainbow { color: #f0abfc; } .vchip-celestial { color: #c4b5fd; } .vchip-royal { color: #f0b12a; }
 .spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 9999px; animation: spin 700ms linear infinite; vertical-align: -0.1em; }
 
 @media (prefers-reduced-motion: reduce) {

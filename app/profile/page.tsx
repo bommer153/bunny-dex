@@ -1,4 +1,4 @@
-import { CONFIG, ITEMS, itemInfo } from "@/game/config";
+import { ACHIEVEMENTS, CONFIG, ITEMS, itemInfo } from "@/game/config";
 import { auctionSlots, burrowSlots, energyWaitMs, formatDuration } from "@/game/rules";
 import { getEnergy, profile, shopLimitsLeft } from "@/game/services/player";
 import { requireUid } from "../lib/session";
@@ -19,9 +19,10 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
   return (
     <Page title={u.username || "Profile"}>
       <Flash {...await flashFrom(searchParams)} />
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3" aria-label="Stats">
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-label="Stats">
         {[
           ["Dex", `${p.collected}/${p.total}`, `${p.cards} cards owned`],
+          ["Achievements", `🎖️ ${u.achievements?.length ?? 0}/${ACHIEVEMENTS.length}`, "see all on Achievements"],
           ["Battles", `${u.stats?.battlesWon ?? 0}W / ${u.stats?.battlesLost ?? 0}L`, `${u.stats?.hunts ?? 0} hunts`],
           ["Burrow slots", `${burrowSlots(u.level, u.extraBurrowSlots)}`, "earn while away"],
           ["Auction slots", `${auctionSlots(u.level)}`, "+1 every 10 levels"],

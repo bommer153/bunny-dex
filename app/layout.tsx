@@ -8,6 +8,8 @@ import { getUid } from "./lib/session";
 import TiltEffect from "./fx/TiltEffect";
 import { DesktopNav, MobileNav } from "./hud/NavBar";
 import PlayerStatus from "./hud/PlayerStatus";
+import AchievementToast from "./hud/AchievementToast";
+import { claimAchievements } from "@/game/services/achievements";
 import ActivityBoot from "./ActivityBoot";
 import "./globals.css";
 
@@ -25,6 +27,9 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const [session, uid] = await Promise.all([auth(), getUid()]);
+  // Achievements pay out here: every page load and every action (they revalidate the layout) checks, before the
+  // header reads the coins. A player who hasn't played yet has no record, so a failure just means "nothing new".
+  const unlocked = uid ? (await claimAchievements(uid).catch(() => [])).map(({ id, emoji, name, coins }) => ({ id, emoji, name, coins })) : [];
   // eslint-disable-next-line react-hooks/purity -- Server Component: one clock read per request for the daily timer.
   const now = Date.now();
   return (
@@ -58,6 +63,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <DesktopNav />
         </header>
         {children}
+        {unlocked.length > 0 && <AchievementToast key={unlocked.map((a) => a.id).join()} items={unlocked} />}
         <MobileNav />
         <ActivityBoot clientId={process.env.DISCORD_CLIENT_ID ?? ""} signedIn={!!uid} />
       </body>

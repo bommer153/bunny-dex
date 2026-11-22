@@ -18,7 +18,7 @@ export default async function CollectionPage({ searchParams }: PageProps<"/colle
   const link = (p: number, r = rarity) => `/collection?${new URLSearchParams({ ...(r && { rarity: r }), ...(q && { q }), page: String(p) })}`;
 
   return (
-    <Page title={`Collection · Dex ${prog.owned}/${prog.total}`}>
+    <Page title={`Collection · Dex ${prog.owned}/${prog.total} · Variants ${prog.variants.owned}/${prog.variants.total}`}>
       <Flash {...await flashFrom(searchParams)} />
       {sp.fx === "sell" && <Stamp key={String(sp.t)} text="Sold!" />}
       <form action="/collection" role="search" className="flex flex-wrap gap-2">

@@ -21,6 +21,7 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { label: "Community & Help", items: [
     { href: "/leaderboard", label: "Leaderboard", icon: "🏆" },
+    { href: "/achievements", label: "Achievements", icon: "🎖️" },
     { href: "/guide", label: "Guide", icon: "📖" },
   ] },
 ];

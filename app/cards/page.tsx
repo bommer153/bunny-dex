@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CARDS, RARITIES } from "@/game/data/cards";
-import { RARITY_EMOJI, TRAITS } from "@/game/config";
+import { RARITY_EMOJI, TRAITS, variantTag } from "@/game/config";
 import { completedSets, setTitle } from "@/game/rules";
 import { collectionProgress } from "@/game/services/cards";
 import { getUid } from "../lib/session";
@@ -23,6 +23,20 @@ export default async function CardsPage({ searchParams }: PageProps<"/cards">) {
             </li>
           ))}
         </ul>
+      )}
+      {dex && (
+        <section aria-label="Variant Dex" className="flex flex-col gap-2">
+          <h2 className="text-sm text-plum-300">
+            <strong className="text-plum-100">Variant Dex {dex.variants.owned}/{dex.variants.total}</strong> · each bunny counts once per special variant you own it in
+          </h2>
+          <ul className="flex flex-wrap gap-2 text-sm">
+            {dex.variants.kinds.map((k) => (
+              <li key={k.key} className={`vchip-${k.key} rounded-full border px-3 py-1 ${k.owned === k.total ? "border-gold-400 bg-gold-500/15" : "border-plum-700"}`}>
+                {variantTag(k.key)}<span className="tabular-nums">{k.owned}/{k.total}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       <div className="flex flex-wrap gap-2 text-sm">
         <Link href="/cards" className={`rounded-full px-3 py-1 ${!rarity ? "bg-gold-500 text-plum-950" : "bg-plum-800"}`}>All</Link>
