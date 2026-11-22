@@ -15,7 +15,7 @@ import * as market from "../game/services/market";
 import * as trade from "../game/services/trade";
 import * as battle from "../game/services/battle";
 import { fx } from "./fx";
-import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardImage, cardLine, cid, coins, embed, info, mention, mood, row } from "./ui";
+import { BRAND, GEM, MASCOT_URL, RARITY_COLOR, VIOLET, bar, btn, mascotFile, cardEmbed, cardFile, cardImage, cardLine, cid, coins, embed, info, mention, mood, rarityBadge, row } from "./ui";
 
 /** `frames` are shown first, one after another, by editing the message (a simple Discord "animation"). */
 /** `frames` play first (message edits). `ms` = how long this frame stays up (default 900ms). */
@@ -218,7 +218,7 @@ type BattleResult = Pick<Fight, "lanes" | "winner"> & Partial<Pick<Fight, "bonus
 export function renderBattle(r: BattleResult, aName: string, bName: string, shown = r.lanes.length) {
   const lanes = r.lanes.map((l, i) => {
     if (i >= shown) return `**Lane ${i + 1}:** ${mood("thinking", "⚔️")} *clashing…*`;
-    const side = (f: typeof l.a, p: number) => (f ? `${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} (${p})` : "*empty*");
+    const side = (f: typeof l.a, p: number) => (f ? `${rarityBadge(f.def.rarity)} ${f.def.name} Lv${f.level} (${p})` : "*empty*");
     const mark = l.winner === "a" ? "⬅️" : l.winner === "b" ? "➡️" : "🤝";
     return `**Lane ${i + 1}:** ${side(l.a, l.pa)} ${mark} ${side(l.b, l.pb)}`;
   });
@@ -288,7 +288,7 @@ export async function doHunt(uid: string, count = 1, guildId?: string | null): P
   const best = h.cards.reduce((x, y) => (RARITIES.indexOf(y.card.rarity) > RARITIES.indexOf(x.card.rarity) ? y : x));
   const fresh = h.cards.filter((c) => c.isNew).length;
   const big = BIG.has(best.card.rarity);
-  const bigText = `${RARITY_EMOJI[best.card.rarity]} ${best.variant !== "normal" ? variantInfo(best.variant).name + " " : ""}**${best.card.name}**`;
+  const bigText = `${rarityBadge(best.card.rarity)} ${best.variant !== "normal" ? variantInfo(best.variant).name + " " : ""}**${best.card.name}**`;
   if (big && guildId) void hooks.bigPull(guildId, `🌟 ${mention(uid)} just pulled ${bigText} (${best.card.rarity})!`).catch(() => {});
   const extra = [
     big && `🌟 **${best.card.rarity.toUpperCase()} PULL!** 🌟`,
@@ -309,7 +309,7 @@ export async function doHunt(uid: string, count = 1, guildId?: string | null): P
         .addFields({ name: `${GEM} Code`, value: `\`${best.code}\``, inline: true }, ...status)
     // Multi: every card on its own line (readable without media); the best pull is the picture.
     : cardEmbed(best.card, { variant: best.variant, title: `🌿 Hunt ×${count}: best pull ${RARITY_EMOJI[best.card.rarity]} ${best.card.name}!`, image: "full" })
-        .setDescription(h.cards.map((c) => `${RARITY_EMOJI[c.card.rarity]} ${c.variant !== "normal" ? `*${c.variant}* ` : ""}**${c.card.name}** · \`${c.code}\`${c.isNew ? " 🆕" : ""}${c === best ? " ⭐" : ""}`).join("\n"))
+        .setDescription(h.cards.map((c) => `${rarityBadge(c.card.rarity)} ${c.variant !== "normal" ? `*${c.variant}* ` : ""}**${c.card.name}** · \`${c.code}\`${c.isNew ? " 🆕" : ""}${c === best ? " ⭐" : ""}`).join("\n"))
         .setFields(status);
   e.setFooter({ text: `+${h.xpGained} XP${h.xpGained < CONFIG.huntXp * count ? " (half XP after 100 hunts today)" : ""} · ${count > 1 ? `×${count} · ` : ""}costs ⚡${cost * count}` });
   const opening = count > 1 ? `🌿 *You sweep the meadow ${count} times…*` : "🌿 *You push through the tall grass…*";
@@ -398,7 +398,7 @@ const commands: Record<string, Handler> = {
   async daily({ uid }) {
     const d = await player.daily(uid);
     const days = Array.from({ length: 7 }, (_, i) => (i < d.day ? "🟧" : "⬜")).join("");
-    const bonus = d.bonus ? `\n🎁 **Day 7 bonus:** ${RARITY_EMOJI[d.bonus.card.rarity]} ${d.bonus.variant !== "normal" ? d.bonus.variant + " " : ""}**${d.bonus.card.name}** \`${d.bonus.code}\`` : "";
+    const bonus = d.bonus ? `\n🎁 **Day 7 bonus:** ${rarityBadge(d.bonus.card.rarity)} ${d.bonus.variant !== "normal" ? d.bonus.variant + " " : ""}**${d.bonus.card.name}** \`${d.bonus.code}\`` : "";
     const next = d.day === 7 ? "a new week (day 1)" : `day ${d.day + 1}: ${coins(streakCoins(d.streak + 1))}${d.day === 6 ? " + a 🎁 rare+ bunny" : ""}`;
     return `📅 **Daily · 🔥 ${d.streak}-day streak**\n${days} day ${d.day}/7\n\n${coins(d.coins)}, 🥕 ×${d.carrots} and a full ⚡ energy bar (${d.energy}/${d.max}).${bonus}\n\nTomorrow: ${next}. Skip 2 days and the streak resets.`;
   },
@@ -466,7 +466,7 @@ const commands: Record<string, Handler> = {
 
   async combine({ uid, args }) {
     const table = RARITIES.filter((r) => nextRarity(r))
-      .map((r) => `${RARITY_EMOJI[r]} ${r} → ${RARITY_EMOJI[nextRarity(r)!]} ${nextRarity(r)} · **${Math.round(COMBINE_CHANCE[r] * 100)}%**`)
+      .map((r) => `${rarityBadge(r)} ${r} → ${rarityBadge(nextRarity(r)!)} ${nextRarity(r)} · **${Math.round(COMBINE_CHANCE[r] * 100)}%**`)
       .join("\n");
     const howTo = `🧪 **Combine** ${COMBINE_COUNT} cards of the same rarity for a chance at a random card of the next rarity.\nIf it fails you keep only the most valuable one.\n\n${table}\n\nUsage: \`${P} combine <code> <code> <code>\`, \`${P} combine auto [rarity]\` or \`${P} combine all <rarity>\``;
     const spareOf = (list: { slug: string }[], r: Rarity) => list.filter((c) => getCard(c.slug).rarity === r).length;
@@ -491,7 +491,7 @@ const commands: Record<string, Handler> = {
       if (n < COMBINE_COUNT) fail("INVALID", `You need ${COMBINE_COUNT} spare ${want} duplicates. Your best copy of each bunny, locked cards and your deck are never used.`);
       const up = nextRarity(want)!;
       return {
-        embeds: [info(`🧪 Combine all **${n}** spare ${RARITY_EMOJI[want]} **${want}** duplicates, ${COMBINE_COUNT} at a time?\nEach combine has a **${Math.round(COMBINE_CHANCE[want] * 100)}%** chance at a ${RARITY_EMOJI[up]} **${up}**. A fail keeps the best of the ${COMBINE_COUNT}, and it goes back in the pot.\n\n*Your best copy of each bunny, locked cards and your deck are never used.*`)],
+        embeds: [info(`🧪 Combine all **${n}** spare ${rarityBadge(want)} **${want}** duplicates, ${COMBINE_COUNT} at a time?\nEach combine has a **${Math.round(COMBINE_CHANCE[want] * 100)}%** chance at a ${rarityBadge(up)} **${up}**. A fail keeps the best of the ${COMBINE_COUNT}, and it goes back in the pot.\n\n*Your best copy of each bunny, locked cards and your deck are never used.*`)],
         components: [row(btn(cid("cmball", want, uid), "🧪 Combine all", ButtonStyle.Danger), btn(cid("cancel", "", uid), "Cancel"))],
       };
     }
@@ -511,7 +511,7 @@ const commands: Record<string, Handler> = {
     if (list.some((c) => getCard(c.slug).rarity !== rarity)) fail("INVALID", "All cards must be the same rarity.");
     const up = nextRarity(rarity) ?? fail("INVALID", "Secret cards are already the top rarity.");
     return {
-      embeds: [info(`🧪 Combine these for a **${Math.round(COMBINE_CHANCE[rarity] * 100)}%** chance at a ${RARITY_EMOJI[up]} **${up}** bunny?\n${list.map(cardLine).join("\n")}\n\n**On failure you keep only the most valuable one.**`)],
+      embeds: [info(`🧪 Combine these for a **${Math.round(COMBINE_CHANCE[rarity] * 100)}%** chance at a ${rarityBadge(up)} **${up}** bunny?\n${list.map(cardLine).join("\n")}\n\n**On failure you keep only the most valuable one.**`)],
       components: [row(btn(cid("combine", codes.join(","), uid), "Combine", ButtonStyle.Danger), btn(cid("cancel", "", uid), "Cancel"))],
     };
   },
@@ -578,7 +578,7 @@ const commands: Record<string, Handler> = {
   async battle({ name, uid, args }) {
     if (args[0]?.toLowerCase() === "random") {
       const s = await battle.scout(uid);
-      const team = (t: typeof s.a) => t.map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n") || "*no cards*";
+      const team = (t: typeof s.a) => t.map((f, i) => `${i + 1}. ${rarityBadge(f.def.rarity)} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n") || "*no cards*";
       return {
         embeds: [info(`${mood("thinking", "🔭")} **Scouting** ·${s.opponent.username || "a wild player"}\n${team(s.b)}\n\n**Your deck** (lane order)\n${team(s.a)}\n\n*Tip: element advantage gives +25% in a lane. Edit your deck to counter, or find another opponent.*`)],
         components: [row(
@@ -591,7 +591,7 @@ const commands: Record<string, Handler> = {
     if (!args.length) {
       const team = await cards.getTeam(uid);
       return {
-        embeds: [info(`⚔️ **Battle**\nYour team: ${team.map((t) => `${RARITY_EMOJI[t.def.rarity]} ${t.def.name} Lv${t.level}`).join(" · ") || "*no cards*"}\n\nFight a random player (⚡${CONFIG.energyCost.battle}) or challenge someone. Winner +${CONFIG.battleWinCoins} coins.`)],
+        embeds: [info(`⚔️ **Battle**\nYour team: ${team.map((t) => `${rarityBadge(t.def.rarity)} ${t.def.name} Lv${t.level}`).join(" · ") || "*no cards*"}\n\nFight a random player (⚡${CONFIG.energyCost.battle}) or challenge someone. Winner +${CONFIG.battleWinCoins} coins.`)],
         components: [
           row(btn(cid("menu", "battle random", uid), "🎲 Random battle", ButtonStyle.Primary), btn(cid("menu", "deck", uid), "🛡️ Edit deck")),
           row(new UserSelectMenuBuilder().setCustomId(cid("challenge", "", uid)).setPlaceholder("🤺 Challenge a player")),
@@ -674,7 +674,7 @@ const commands: Record<string, Handler> = {
     const rows = await market.listAuctions({ sellerId: sub === "mine" ? uid : undefined });
     const lines = rows.map((a) => {
       const price = a.bids ? `top ${coins(a.topBid)}` : `min ${coins(a.minBid)}`;
-      return `\`${a.code}\` ${RARITY_EMOJI[getCard(a.slug).rarity]} **${getCard(a.slug).name}** Lv${a.level} · ${price} · ends <t:${Math.floor(a.endsAt.getTime() / 1000)}:R>`;
+      return `\`${a.code}\` ${rarityBadge(getCard(a.slug).rarity)} **${getCard(a.slug).name}** Lv${a.level} · ${price} · ends <t:${Math.floor(a.endsAt.getTime() / 1000)}:R>`;
     });
     return {
       embeds: [info(`🔨 **Auctions** (ending soonest)\n${lines.join("\n") || "No auctions running."}\n\nView: \`${P} auction view <id>\` · Start: \`${P} auction start <code> <minBid> <time> [buyout]\``)],
@@ -685,8 +685,8 @@ const commands: Record<string, Handler> = {
   async tower({ uid }) {
     const u = await player.getUser(uid);
     const floor = (u.towerFloor ?? 0) + 1;
-    const foes = towerTeam(floor).map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
-    const mine = (await cards.getTeam(uid)).map((f, i) => `${i + 1}. ${RARITY_EMOJI[f.def.rarity]} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
+    const foes = towerTeam(floor).map((f, i) => `${i + 1}. ${rarityBadge(f.def.rarity)} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
+    const mine = (await cards.getTeam(uid)).map((f, i) => `${i + 1}. ${rarityBadge(f.def.rarity)} ${f.def.name} Lv${f.level} · ${TRAITS[f.def.element].name}`).join("\n");
     const r = towerReward(floor);
     return {
       embeds: [info(`🏰 **Meadow Tower · floor ${floor}**\n${foes}\n\n**Your deck**\n${mine}\n\nReward: ${coins(r.coins)}${r.shards ? ` + 💠 ${r.shards} shards` : ""} · costs ⚡${CONFIG.energyCost.battle}`)],
@@ -696,7 +696,7 @@ const commands: Record<string, Handler> = {
 
   async shard({ uid, args }) {
     const u = await player.getUser(uid);
-    const rates = Object.entries(SHARD_YIELD).map(([r, n]) => `${RARITY_EMOJI[r as Rarity]} ${n}`).join(" · ");
+    const rates = Object.entries(SHARD_YIELD).map(([r, n]) => `${rarityBadge(r as Rarity)} ${n}`).join(" · ");
     if (args.length) {
       const codes = [...new Set(args.map((a) => a.toLowerCase()))];
       if (codes.length > 12) fail("INVALID", "Up to 12 codes at a time. Use `bd shard` to break all spare duplicates at once.");

@@ -19,7 +19,7 @@ import {
   UNLOCKED, availableCards, errorButtons, hooks, readyQuests, withStatus, battleReply, nextButtons, burrowCollected, callCommand, cardSelect, clipFrame, doHunt, renderAuction, revealFrames, txReply, renderBurrow, renderCardPanel, renderCollection, renderHelp, renderLeaderboard, renderMenu, renderShop, renderTrade, runCommand,
   type Ctx, type Reply,
 } from "./commands";
-import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, loadMoods, mention, mood, row } from "./ui";
+import { RED, asPlayer, btn, cardEmbed, cardFile, cardLine, cid, coins, info, loadMoods, mention, mood, rarityBadge, row } from "./ui";
 import { warmCards } from "./grid";
 import { fx, warmFx } from "./fx";
 import { tryMedia } from "./media";
@@ -286,7 +286,7 @@ async function handleInteraction(i: Interaction) {
         s.caught = uid; // set before any await: Node runs this synchronously, so only the first click gets past the check
         const uc = await cards.grantCard(uid, s.slug, s.variant);
         const def = getCard(s.slug);
-        return void (await i.update({ content: `🎉 ${mention(uid)} caught the wild ${RARITY_EMOJI[def.rarity]} **${def.name}**! \`${uc.code}\``, components: [row(btn(cid("card", uc.code, uid), "Open card"), btn(cid("hunt", "1", uid), "🌿 Hunt", ButtonStyle.Primary))], allowedMentions: { parse: [] } }));
+        return void (await i.update({ content: `🎉 ${mention(uid)} caught the wild ${rarityBadge(def.rarity)} **${def.name}**! \`${uc.code}\``, components: [row(btn(cid("card", uc.code, uid), "Open card"), btn(cid("hunt", "1", uid), "🌿 Hunt", ButtonStyle.Primary))], allowedMentions: { parse: [] } }));
       }
       case "cp":
         return cardPanelButton(i, sub, code);
@@ -331,13 +331,13 @@ async function handleInteraction(i: Interaction) {
       }
       case "cmball": {
         const rarity = arg as Rarity;
-        const opening = `🧪 *You tip your spare ${RARITY_EMOJI[rarity]} ${rarity} bunnies into the cauldron…*\n${CAULDRON_SHAKE[rarity]}`;
+        const opening = `🧪 *You tip your spare ${rarityBadge(rarity)} ${rarity} bunnies into the cauldron…*\n${CAULDRON_SHAKE[rarity]}`;
         await i.update({ embeds: [info(opening)], components: [] }); // drop the button first: a long run must not start twice
         const rs = await cards.combineAll(uid, rarity);
         const wins = rs.flatMap((r) => (r.success ? [r] : []));
         const left = (await cards.spareDupes(uid)).filter((c) => getCard(c.slug).rarity === rarity).length;
-        const got = wins.map((r) => `${RARITY_EMOJI[r.card.rarity]} ${r.variant !== "normal" ? r.variant + " " : ""}**${r.card.name}** \`${r.code}\``).join("\n");
-        const text = `🧪 **Combined ${rs.length}×** ${RARITY_EMOJI[rarity]} ${rarity}\n✨ **${wins.length}** upgraded · 💨 ${rs.length - wins.length} fizzled${got ? `\n\n${got}` : ""}`;
+        const got = wins.map((r) => `${rarityBadge(r.card.rarity)} ${r.variant !== "normal" ? r.variant + " " : ""}**${r.card.name}** \`${r.code}\``).join("\n");
+        const text = `🧪 **Combined ${rs.length}×** ${rarityBadge(rarity)} ${rarity}\n✨ **${wins.length}** upgraded · 💨 ${rs.length - wins.length} fizzled${got ? `\n\n${got}` : ""}`;
         const clip = clipFrame(`combine-${rarity}-${wins.length ? "ok" : "fail"}`, opening);
         const next = row(
           ...(left >= COMBINE_COUNT ? [btn(cid("menu", `combine all ${rarity}`, uid), `🔁 ${left} spares left: again`, ButtonStyle.Primary)] : []),

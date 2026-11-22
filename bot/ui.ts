@@ -23,6 +23,8 @@ export function loadMoods(list: Iterable<{ id: string; name: string | null; anim
   for (const e of list) if (e.name?.startsWith("bunnydex_")) moods.set(e.name.slice(9), `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`);
 }
 export const mood = (name: string, fallback: string) => moods.get(name) ?? fallback;
+/** The `bunnydex_rarity_<rarity>` gem emoji (public/emojis), else the colored circle. Text only, like mood(): titles keep RARITY_EMOJI. */
+export const rarityBadge = (r: Rarity) => mood(`rarity_${r}`, RARITY_EMOJI[r]);
 
 /** A new embed headed with the current player's name and avatar (none for background posts like auction results). */
 export function embed() {
@@ -54,7 +56,7 @@ export function cardLine(c: { code: string; slug: string; variant: string; level
   const def = getCard(c.slug);
   const v = c.variant !== "normal" ? `${variantInfo(c.variant).name} ` : "";
   const status = c.status && c.status !== "available" ? ` · *${c.status}*` : "";
-  return `\`${c.code}\` ${RARITY_EMOJI[def.rarity]} ${v}**${def.name}** · Lv ${c.level}${status}${c.locked ? " 🔒" : ""}`;
+  return `\`${c.code}\` ${rarityBadge(def.rarity)} ${v}**${def.name}** · Lv ${c.level}${status}${c.locked ? " 🔒" : ""}`;
 }
 
 /** Card art is attached from public/cards, so it works without the website being online. */

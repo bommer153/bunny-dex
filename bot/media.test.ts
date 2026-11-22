@@ -6,7 +6,7 @@ import { battleReply, clipFrame, renderHelp, txReply, type Reply } from "./comma
 import { cardEmbed, cardFile, info } from "./ui";
 import sharp from "sharp";
 import { collectionGrid, warmCards } from "./grid";
-import { CARDS, type Rarity } from "../game/data/cards";
+import { CARDS, RARITIES, type Rarity } from "../game/data/cards";
 
 before(async () => { await warmFx(); });
 
@@ -78,6 +78,14 @@ test("card pictures: framed in the rarity color, legendary+ animated, embed URL 
   assert.equal(cardFile(legend.slug).name, `${legend.slug}.gif`);
   assert.equal((cardFile(legend.slug).attachment as Buffer).subarray(0, 6).toString(), "GIF89a");
   assert.equal(cardEmbed(legend, { image: "full" }).toJSON().image?.url, `attachment://${legend.slug}.gif`);
+});
+
+test("rarity badge emojis: one per rarity, 128 px, transparent around the gem", async () => {
+  for (const r of RARITIES) {
+    const { data, info: m } = await sharp(`public/emojis/bunnydex_rarity_${r}.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    assert.deepEqual([m.width, m.height], [128, 128], r);
+    assert.equal(data[3], 0, `${r}: top-left corner should be transparent`);
+  }
 });
 
 test("collection grid: a page with a legendary+ card loops as a GIF, other pages stay a PNG", async () => {

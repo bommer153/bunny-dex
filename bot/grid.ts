@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { AttachmentBuilder } from "discord.js";
@@ -25,8 +26,13 @@ async function thumb(slug: string, size: number) {
   return t;
 }
 
-/** A card on the page. The badge shows its level, or `chip` (in the rarity color) when given. */
-type Tile = { slug: string; level?: number; chip?: string };
+/** A card on the page. The corner shows its level, or its rarity gem when `badge` is set (card pictures). */
+type Tile = { slug: string; level?: number; badge?: boolean };
+const badges = new Map<Rarity, string>(); // the rarity emoji PNGs (public/emojis) as data URIs for the SVG
+const badgeHref = (r: Rarity) => {
+  if (!badges.has(r)) badges.set(r, `data:image/png;base64,${readFileSync(path.join(process.cwd(), "public", "emojis", `bunnydex_rarity_${r}.png`)).toString("base64")}`);
+  return badges.get(r)!;
+};
 const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i])) as Record<Rarity, number>;
 const at = (i: number) => [PAD + (i % COLS) * (TILE + PAD), PAD + Math.floor(i / COLS) * (TILE + PAD)] as const;
@@ -74,10 +80,11 @@ function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
         over += `<circle cx="${sx}" cy="${sy}" r="${6 + v * 8}" fill="url(#spark)" opacity="${v}"/><path d="${star(sx, sy, 3 + v * 8)}" fill="#fff" opacity="${v}"/>`;
       }
     }
-    // Badge last so sparkles never cover it; a chip is sized to its text (approx. bold 15 px sans).
-    const bw = c.chip ? Math.round(c.chip.length * 8.6 + 16) : 54;
-    over += `<rect x="${x + TILE - 8 - bw}" y="${y + TILE - 34}" width="${bw}" height="26" rx="8" fill="#1e1030" stroke="${stroke}" stroke-width="2"/>
-      <text x="${x + TILE - 8 - bw / 2}" y="${y + TILE - 15}" font-family="Geist, sans-serif" font-size="15" font-weight="bold" fill="${c.chip ? stroke : "#fff"}" text-anchor="middle">${c.chip ?? `Lv ${c.level}`}</text>`;
+    // Corner badge last so sparkles never cover it.
+    over += c.badge
+      ? `<image href="${badgeHref(rarity)}" x="${x + TILE - 54}" y="${y + TILE - 54}" width="46" height="46"/>`
+      : `<rect x="${x + TILE - 62}" y="${y + TILE - 34}" width="54" height="26" rx="8" fill="#1e1030" stroke="${stroke}" stroke-width="2"/>
+      <text x="${x + TILE - 35}" y="${y + TILE - 15}" font-family="Geist, sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">Lv ${c.level}</text>`;
   });
   const svg = (body: string) => Buffer.from(`<svg width="${Math.round(W * scale)}" height="${Math.round(H * scale)}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`);
   return { under: svg(under), over: svg(over) };
@@ -120,11 +127,11 @@ export async function collectionGrid(list: Tile[]): Promise<AttachmentBuilder | 
   }
 }
 
-/** Draws every card's embed picture once (its collection tile, large, with a rarity chip) into cardPics. */
+/** Draws every card's embed picture once (its collection tile, large, with its rarity gem) into cardPics. */
 export async function warmCards() {
   const start = Date.now();
   for (const c of CARDS) {
-    const { ext, data } = await render([{ slug: c.slug, chip: c.rarity[0].toUpperCase() + c.rarity.slice(1) }], TILE + 2 * PAD, TILE + 2 * PAD, CARD_SCALE);
+    const { ext, data } = await render([{ slug: c.slug, badge: true }], TILE + 2 * PAD, TILE + 2 * PAD, CARD_SCALE);
     cardPics.set(c.slug, { name: `${c.slug}.${ext}`, data });
   }
   return { count: cardPics.size, ms: Date.now() - start };
