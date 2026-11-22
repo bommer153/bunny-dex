@@ -8,6 +8,7 @@ import { getCard, type Rarity } from "@/game/data/cards";
 import { RARITY_EMOJI, TRAITS, variantInfo } from "@/game/config";
 import { teamBonus } from "@/game/synergy";
 import { setDeckAction } from "../actions";
+import { cardFace } from "../lib/cardFace";
 import { SubmitButton } from "../SubmitButton";
 
 export type DeckCard = { code: string; slug: string; name: string; rarity: Rarity; variant: string; level: number; stats: string };
@@ -106,7 +107,7 @@ export default function DeckPicker({ cards, deck, size, button, ghostButton }: {
                     <span className="gem" aria-hidden /> Lane {lane + 1}
                   </span>
                 )}
-                <Image src={`/cards/${c.slug}.png`} alt="" width={240} height={240} className="aspect-square w-full rounded-lg object-cover" />
+                <Image src={cardFace(c.slug, c.variant)} alt="" width={430} height={610} unoptimized className="aspect-[43/61] w-full rounded-lg" />
                 <span className="text-sm font-semibold leading-tight">{RARITY_EMOJI[c.rarity]} {c.variant !== "normal" && `${variantInfo(c.variant).name} `}{c.name}</span>
                 <span className="text-[11px] text-plum-400 sm:text-xs">{c.stats}</span>
                 <span className={`text-xs font-medium ${on ? "text-gold-300" : "text-plum-400"}`}>{on ? "✓ In deck" : blocked ? "Deck full" : "+ Add"}</span>

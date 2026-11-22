@@ -2,23 +2,17 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CARDS, RARITIES, getCard, type Rarity } from "@/game/data/cards";
-import { RARITY_EMOJI, variantInfo, variantTag } from "@/game/config";
+import { RARITY_EMOJI } from "@/game/config";
 import { cardStats } from "@/game/rules";
 import CardPreview from "./CardPreview";
+import { cardFace } from "./lib/cardFace";
 
 export const RARITY_TEXT: Record<Rarity, string> = {
   common: "text-plum-300", uncommon: "text-green-400", rare: "text-blue-400", epic: "text-purple-400",
   legendary: "text-yellow-400", mythic: "text-red-400", secret: "text-fuchsia-300",
 };
-const RARITY_RING: Record<Rarity, string> = {
-  common: "ring-plum-600", uncommon: "ring-green-500", rare: "ring-blue-500", epic: "ring-purple-500",
-  legendary: "ring-yellow-400", mythic: "ring-red-500", secret: "ring-fuchsia-400",
-};
-
-const SHINY = new Set<Rarity>(["legendary", "mythic", "secret"]);
-
 /**
- * Card art + name + stats. `children` renders under it (e.g. action forms).
+ * The standard card picture (+ level stats and code for owned cards). `children` renders under it (e.g. action forms).
  * `index` staggers the entrance, `tilt` follows the pointer on desktop, `preview` opens a 3D close-up on click.
  */
 export function CardTile({ slug, variant = "normal", level = 1, code, status, href, index, tilt, preview, missing, children }: {
@@ -27,44 +21,33 @@ export function CardTile({ slug, variant = "normal", level = 1, code, status, hr
 }) {
   const def = getCard(slug);
   const s = cardStats(def, level);
-  // `missing`: a Dex slot you haven't caught yet, shown as a dark silhouette so empty slots pull you to collect.
-  // Art is full-bleed (has a background), so a pure-black silhouette is just a black square; a dark blur teases the bunny instead.
-  const art = missing
-    ? <div className="overflow-hidden rounded-lg"><Image src={`/cards/${slug}.png`} alt="Not caught yet" width={240} height={240} className="aspect-square w-full object-cover scale-110 blur-[6px] brightness-[0.35] grayscale" /></div>
-    : (
-      <div className="relative rounded-lg">
-        {/* square crop: art files mix square and portrait sizes, so tiles stay uniform */}
-        <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={240} className="aspect-square w-full object-cover rounded-lg" />
-        {variant !== "normal" && (
-          <>
-            <div className={`vfx vfx-${variant}`} aria-hidden />
-            <span className={`vchip-${variant} absolute left-1.5 top-1.5 rounded-full border border-current bg-plum-950/85 px-1.5 text-[9px] font-bold uppercase leading-4 tracking-wider sm:text-[10px]`}>
-              {variantInfo(variant).name}
-            </span>
-          </>
-        )}
-      </div>
-    );
+  // The standard trading-card picture (name, rarity, element, trait, base stats, variant look), shared with the bot.
+  // `missing`: a Dex slot you haven't caught yet, shown blurred and dark so empty slots pull you to collect.
+  const art = (
+    <div className="overflow-hidden rounded-xl">
+      <Image
+        src={cardFace(slug, missing ? "normal" : variant)} alt={missing ? "Not caught yet" : def.name} width={430} height={610} unoptimized
+        className={`aspect-[43/61] w-full ${missing ? "scale-110 blur-[6px] brightness-[0.35] grayscale" : ""}`}
+      />
+    </div>
+  );
   const stats = `Lv ${level} · ⚔️${s.atk} 🛡️${s.def} ❤️${s.hp} · ${def.element}`;
   const top = preview
     ? <CardPreview slug={slug} name={def.name} rarity={def.rarity} variant={variant} stats={stats} code={code}>{art}</CardPreview>
     : href ? <Link href={href}>{art}</Link> : art;
   return (
     <div
-      className={`card-tile rounded-xl bg-plum-900 ${missing ? "" : `vbg-${variant}`} p-2 sm:p-3 ring-2 ${RARITY_RING[def.rarity]} flex flex-col gap-2 ${SHINY.has(def.rarity) ? "card-shine" : ""} ${tilt ? "tilt" : ""} ${index !== undefined ? "anim-rise" : ""}`}
+      className={`card-tile rounded-xl flex flex-col gap-1.5 ${tilt ? "tilt" : ""} ${index !== undefined ? "anim-rise" : ""}`}
       style={index !== undefined ? { animationDelay: `${Math.min(index, 12) * 35}ms` } : undefined}
     >
       {top}
-      <div className="flex flex-1 flex-col">
-        <div className={`truncate text-sm font-semibold leading-tight sm:text-base ${RARITY_TEXT[def.rarity]}`}>
-          {RARITY_EMOJI[def.rarity]} {missing ? "???" : <>{variantTag(variant)}{def.name}</>}
-        </div>
-        <div className="text-[11px] text-plum-400 sm:text-xs min-h-[2lh]">
-          {missing ? `Not caught yet · ${def.element}` : stats}
-          {code && <> · <code className="text-plum-300">{code}</code></>}
+      {/* The picture shows base stats; an owned card also gets its level stats and code. */}
+      {(missing || code) && (
+        <div className="flex-1 px-1 text-[11px] text-plum-400 sm:text-xs">
+          {missing ? <>??? · Not caught yet · {def.element}</> : <>Lv {level} · ⚔️{s.atk} 🛡️{s.def} ❤️{s.hp} · <code className="text-plum-300">{code}</code></>}
           {status && status !== "available" && <> · <em>{status}</em></>}
         </div>
-      </div>
+      )}
       {children}
     </div>
   );

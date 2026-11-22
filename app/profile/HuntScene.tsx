@@ -9,6 +9,7 @@ import type { Rarity } from "@/game/data/cards";
 import { RARITY_EMOJI, variantInfo, variantTag } from "@/game/config";
 import { formatDuration } from "@/game/format";
 import { huntPlay } from "../actions";
+import { cardFace } from "../lib/cardFace";
 import { button, ghostButton, panel } from "../components";
 import { Burst } from "../fx/Burst";
 import { RANK, RARITY_RGB, ease, reducedMotion, type CardMesh } from "../fx/stage";
@@ -293,7 +294,7 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
         )}
         {showFallback && (
           // eslint-disable-next-line @next/next/no-img-element -- no-WebGL fallback: the back while waiting, the art once revealed
-          <img src={fallbackFace ? `/cards/${result.card.slug}.png` : "/brand/card-back.webp"} alt="" className="absolute inset-y-[6%] left-1/2 h-[88%] -translate-x-1/2 rounded-lg anim-pop" />
+          <img src={fallbackFace ? cardFace(result.card.slug, result.card.variant) : "/brand/card-back.webp"} alt="" className="absolute inset-y-[6%] left-1/2 h-[88%] -translate-x-1/2 rounded-lg anim-pop" />
         )}
 
         {multi && batch && (
@@ -314,13 +315,7 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
                         <Image src="/brand/card-back.webp" alt="" width={120} height={168} className="size-full rounded-[5px] object-cover" />
                       </span>
                       <span className={`flip-face flip-front card-border ${on ? GLOW[c.rarity] : ""}`}>
-                        <Image src={`/cards/${c.card.slug}.png`} alt="" width={120} height={168} className="size-full rounded-[5px] object-cover" />
-                        {c.card.variant !== "normal" && (
-                          <>
-                            <span className={`vfx vfx-${c.card.variant}`} />
-                            <span className={`vchip-${c.card.variant} absolute left-1 top-1 rounded-full border border-current bg-plum-950/85 px-1 text-[8px] font-bold uppercase leading-3 sm:text-[9px]`}>{variantInfo(c.card.variant).name}</span>
-                          </>
-                        )}
+                        <Image src={cardFace(c.card.slug, c.card.variant)} alt="" width={120} height={168} unoptimized className="size-full rounded-[5px] object-cover" />
                       </span>
                     </span>
                     {on && RANK[c.rarity] >= RANK.rare && <Burst items={["✨", "◆"]} count={8 + RANK[c.rarity] * 2} spread={45} salt={i + 1} />}

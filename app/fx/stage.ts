@@ -4,6 +4,7 @@
 // - Tweens run off the render loop and can be fast-forwarded, so Skip always lands on the same final state.
 import type * as BABYLON from "@babylonjs/core";
 import type { Rarity } from "@/game/data/cards";
+import { cardFace } from "../lib/cardFace";
 
 type B = typeof BABYLON;
 let lib: Promise<B> | null = null;
@@ -215,7 +216,7 @@ export async function createStage(canvas: HTMLCanvasElement, opts: { radius?: nu
     const root = new B.TransformNode("card", scene);
     const front = B.MeshBuilder.CreatePlane("front", { width: w, height: h }, scene);
     const frontMat = new B.StandardMaterial("frontMat", scene);
-    const art = new B.Texture(`/cards/${slug}.png`, scene);
+    const art = new B.Texture(cardFace(slug, variant), scene);
     // Crop like CSS object-cover: most art is square, the card face is 5:7, so stretching would squash the bunny.
     const cover = () => {
       const { width, height } = art.getBaseSize();

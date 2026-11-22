@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // app/api/card uses the bot's card renderer; discord.js has optional native deps the bundler can't resolve.
+  serverExternalPackages: ["discord.js"],
   experimental: {
     // As a Discord Activity the site is served through Discord's proxy (<app id>.discordsays.com), so form actions arrive from there.
     serverActions: { allowedOrigins: ["*.discordsays.com"] },
