@@ -215,7 +215,16 @@ export async function createStage(canvas: HTMLCanvasElement, opts: { radius?: nu
     const root = new B.TransformNode("card", scene);
     const front = B.MeshBuilder.CreatePlane("front", { width: w, height: h }, scene);
     const frontMat = new B.StandardMaterial("frontMat", scene);
-    frontMat.diffuseTexture = new B.Texture(`/cards/${slug}.png`, scene);
+    const art = new B.Texture(`/cards/${slug}.png`, scene);
+    // Crop like CSS object-cover: most art is square, the card face is 5:7, so stretching would squash the bunny.
+    const cover = () => {
+      const { width, height } = art.getBaseSize();
+      const k = width / height / (w / h); // > 1: art is wider than the face
+      if (k > 1) { art.uScale = 1 / k; art.uOffset = (1 - 1 / k) / 2; }
+      else { art.vScale = k; art.vOffset = (1 - k) / 2; }
+    };
+    if (art.isReady()) cover(); else art.onLoadObservable.addOnce(cover);
+    frontMat.diffuseTexture = art;
     frontMat.emissiveColor = new B.Color3(0.45, 0.45, 0.45);
     frontMat.specularColor = new B.Color3(0.08, 0.08, 0.08);
     front.material = frontMat;

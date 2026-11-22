@@ -106,7 +106,7 @@ export default function DeckPicker({ cards, deck, size, button, ghostButton }: {
                     <span className="gem" aria-hidden /> Lane {lane + 1}
                   </span>
                 )}
-                <Image src={`/cards/${c.slug}.png`} alt="" width={240} height={336} className="h-auto w-full rounded-lg" />
+                <Image src={`/cards/${c.slug}.png`} alt="" width={240} height={240} className="aspect-square w-full rounded-lg object-cover" />
                 <span className="text-sm font-semibold leading-tight">{RARITY_EMOJI[c.rarity]} {c.variant !== "normal" && `${variantInfo(c.variant).name} `}{c.name}</span>
                 <span className="text-[11px] text-plum-400 sm:text-xs">{c.stats}</span>
                 <span className={`text-xs font-medium ${on ? "text-gold-300" : "text-plum-400"}`}>{on ? "✓ In deck" : blocked ? "Deck full" : "+ Add"}</span>

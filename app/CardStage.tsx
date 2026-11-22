@@ -116,7 +116,7 @@ export default function CardStage({ slug, name, rarity, variant = "normal", mode
       <div className="relative w-full aspect-[5/7]">
         {/* Plain image first and as the fallback (no WebGL); the 3D canvas fades in over it once loaded. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- static fallback under the canvas */}
-        <img src={`/cards/${slug}.png`} alt={name} className={`absolute inset-[10%] w-[80%] rounded-lg transition-opacity duration-300 ${showCanvas ? "opacity-0" : "opacity-100"}`} />
+        <img src={`/cards/${slug}.png`} alt={name} className={`absolute inset-[10%] size-[80%] rounded-lg object-cover transition-opacity duration-300 ${showCanvas ? "opacity-0" : "opacity-100"}`} />
         <canvas
           ref={canvasRef}
           tabIndex={mode === "inspect" ? 0 : -1}

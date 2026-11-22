@@ -29,6 +29,8 @@ const GLOW: Record<Rarity, string> = {
   legendary: "shadow-[0_0_26px_4px_rgb(250_204_21/0.8)]", mythic: "shadow-[0_0_30px_5px_rgb(248_113_113/0.8)]", secret: "shadow-[0_0_34px_6px_rgb(240_171_252/0.85)]",
 };
 const MIST: [number, number, number] = [0.42, 0.22, 0.62];
+// hunting_animation.mp4 (10 s): calm meadow until ~2.5 s (a green glimmer starts at ~2.7 s), then a green column rising to a flash at ~9.8 s.
+const VIDEO_CALM_END = 2.5, VIDEO_COLUMN = 6.5;
 const BATCHES = [1, 5, 10] as const;
 
 export default function HuntScene({ energy, max, cost, nextInMs }: { energy: number; max: number; cost: number; nextInMs: number }) {
@@ -45,6 +47,11 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
   const [aura, setAura] = useState<{ color: string; rank: number; key: number } | null>(null);
   const [flash, setFlash] = useState<{ color: string; key: number } | null>(null);
   const [variantPop, setVariantPop] = useState<string | null>(null);
+  // The meadow video (public/activity/hunting_animation.mp4) is the backdrop: calm meadow while searching, its green
+  // column as the pillar for common/uncommon reveals; rarer finds fade it out for the coded pillar in their colour.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoOn, setVideoOn] = useState(false);
+  const calm = useRef(false); // hold on the calm part (no rarity hint) until the reveal
   const fx = useRef<{ fog?: { stop: () => void } | null; trail?: { stop: () => void } | null; hover?: () => void; card?: CardMesh; step: number }>({ step: 0 });
 
   const multi = (batch?.cards.length ?? 0) > 1;
@@ -68,10 +75,19 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
     fx.current.step++;
     setPhase("searching");
 
+    const v = videoRef.current;
+    const useVideo = !!v && !reducedMotion();
+    if (useVideo) {
+      calm.current = true;
+      v.currentTime = 0;
+      v.playbackRate = 1;
+      setVideoOn(true);
+      void v.play().catch(() => setVideoOn(false)); // can't play (data saver, codec): the coded mist below still runs
+    }
     if (stage) {
       stage.resume();
       const { B, scene } = stage;
-      fx.current.fog = stage.particles({ count: 160, rgb: MIST, rate: 50, radius: 3.4, size: [1.4, 3], life: [2, 3.5], power: [0.05, 0.25], gravity: 0, blend: "standard", alpha: 0.16 });
+      if (!useVideo) fx.current.fog = stage.particles({ count: 160, rgb: MIST, rate: 50, radius: 3.4, size: [1.4, 3], life: [2, 3.5], power: [0.05, 0.25], gravity: 0, blend: "standard", alpha: 0.16 });
       const head = new B.Vector3(-4, 0, 0);
       const trail = stage.particles({ count: 500, rgb: [0.95, 0.8, 0.4], rate: 170, at: head, radius: 0.05, size: [0.05, 0.15], life: [0.4, 0.9], power: [0.05, 0.3], gravity: 0 });
       fx.current.trail = trail;
@@ -90,6 +106,7 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
     stopSearch();
     if (!r.ok) {
       stopFog();
+      setVideoOn(false);
       setError(r.error);
       setPhase("error");
       if (stage) void stage.shake(300, 0.15);
@@ -126,9 +143,17 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
   async function reveal(r: Pull) {
     fx.current.step++;
     setPhase("revealing");
+    const rank = RANK[r.rarity];
+    calm.current = false;
+    const v = videoRef.current;
+    if (v && videoOn && rank <= RANK.uncommon) {
+      // The video's green column becomes the pillar: sped up so its flash lands as the card turns (~1.3 s).
+      v.currentTime = VIDEO_COLUMN;
+      v.playbackRate = 2.5;
+      void v.play().catch(() => {});
+    } else setVideoOn(false);
     if (!stage) return setPhase("shown");
     stopHover();
-    const rank = RANK[r.rarity];
     const rgb = RARITY_RGB[r.rarity];
     const card = fx.current.card ?? stage.card(r.card.slug, r.rarity, r.card.variant);
     fx.current.card = card;
@@ -136,9 +161,10 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
     const big = rank >= RANK.legendary;
     const color = `rgb(${rgb.map((v) => Math.round(v * 255)).join(" ")})`;
     const motion = !stage.reduced && !reducedMotion();
-    // Rarer finds charge longer before the card turns: a pillar of light in the rarity colour rises behind it,
-    // sparks pour up through it, and legendary+ cards shake harder and harder.
-    if (motion) setAura({ color, rank, key: fx.current.step });
+    // Rarer finds charge longer before the card turns: a pillar of light in the rarity colour rises behind it
+    // (common/uncommon use the video's green column when it plays), sparks pour up through it,
+    // and legendary+ cards shake harder and harder.
+    if (motion && !(videoOn && rank <= RANK.uncommon)) setAura({ color, rank, key: fx.current.step });
     const charge = stage.particles({ count: 60 + rank * 40, rgb, rate: 40 + rank * 25, radius: 0.3, size: [0.1, 0.3], life: [0.3, 0.7], power: [0.5, 1.5], gravity: 0 });
     const rise = rank >= RANK.rare ? stage.particles({ count: 40 + rank * 30, rgb, rate: 30 + rank * 20, radius: 0.9, size: [0.03, 0.1], life: [0.6, 1.2], power: [0.2, 0.6], gravity: 1.2 }) : null;
     const shake = 0.03 * (rank + 1) * (big ? 1.8 : 1);
@@ -166,6 +192,7 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
     if (rank >= RANK.epic) void stage.shake(400 + rank * 60, 0.05 * (rank - 2));
     await flip;
     root.rotation.y = 0;
+    setTimeout(() => setVideoOn(false), 500); // after the video's flash: back to the dark stage so the card reads clearly
     if (big && !stage.skipping) {
       const sp = stage.particles({ count: 150, rgb, rate: 25, radius: 2.2, power: [0.1, 0.4], size: [0.04, 0.12], gravity: 0.3, life: [0.6, 1.6] });
       setTimeout(() => sp?.stop(), 4000);
@@ -198,6 +225,8 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
 
   function skip() {
     fx.current.step++;
+    calm.current = false;
+    if (!multi) setVideoOn(false);
     if (multi) {
       flips.current = flips.current.map(() => true);
       setFlipped(flips.current);
@@ -238,6 +267,16 @@ export default function HuntScene({ energy, max, cost, nextInMs }: { energy: num
       </div>
       <StageFrame glow={phase === "shown" && !!best && RANK[best.rarity] >= RANK.epic}>
       <div className={`relative w-full bg-[radial-gradient(ellipse_at_50%_60%,#3b1764,#130a20_70%)] ${multi ? "min-h-[16rem]" : "aspect-[4/3] sm:aspect-[16/9] max-h-[460px]"}`}>
+        <video
+          ref={videoRef}
+          src="/activity/hunting_animation.mp4"
+          muted
+          playsInline
+          preload="auto"
+          aria-hidden
+          onTimeUpdate={(e) => { if (calm.current && e.currentTarget.currentTime > VIDEO_CALM_END) e.currentTarget.pause(); }}
+          className={`pointer-events-none absolute inset-0 size-full object-cover transition-opacity duration-700 ${videoOn ? "opacity-100" : "opacity-0"}`}
+        />
         {aura && (
           // Behind the canvas (it's transparent), so the pillar rises behind the 3D card.
           <div key={aura.key} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">

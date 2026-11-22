@@ -30,10 +30,11 @@ export function CardTile({ slug, variant = "normal", level = 1, code, status, hr
   // `missing`: a Dex slot you haven't caught yet, shown as a dark silhouette so empty slots pull you to collect.
   // Art is full-bleed (has a background), so a pure-black silhouette is just a black square; a dark blur teases the bunny instead.
   const art = missing
-    ? <div className="overflow-hidden rounded-lg"><Image src={`/cards/${slug}.png`} alt="Not caught yet" width={240} height={336} className="h-auto w-full scale-110 blur-[6px] brightness-[0.35] grayscale" /></div>
+    ? <div className="overflow-hidden rounded-lg"><Image src={`/cards/${slug}.png`} alt="Not caught yet" width={240} height={240} className="aspect-square w-full object-cover scale-110 blur-[6px] brightness-[0.35] grayscale" /></div>
     : (
       <div className="relative rounded-lg">
-        <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={336} className="w-full h-auto rounded-lg" />
+        {/* square crop: art files mix square and portrait sizes, so tiles stay uniform */}
+        <Image src={`/cards/${slug}.png`} alt={def.name} width={240} height={240} className="aspect-square w-full object-cover rounded-lg" />
         {variant !== "normal" && (
           <>
             <div className={`vfx vfx-${variant}`} aria-hidden />
@@ -54,11 +55,11 @@ export function CardTile({ slug, variant = "normal", level = 1, code, status, hr
       style={index !== undefined ? { animationDelay: `${Math.min(index, 12) * 35}ms` } : undefined}
     >
       {top}
-      <div>
-        <div className={`text-sm font-semibold leading-tight sm:text-base ${RARITY_TEXT[def.rarity]}`}>
+      <div className="flex flex-1 flex-col">
+        <div className={`truncate text-sm font-semibold leading-tight sm:text-base ${RARITY_TEXT[def.rarity]}`}>
           {RARITY_EMOJI[def.rarity]} {missing ? "???" : <>{variantTag(variant)}{def.name}</>}
         </div>
-        <div className="text-[11px] text-plum-400 sm:text-xs">
+        <div className="text-[11px] text-plum-400 sm:text-xs min-h-[2lh]">
           {missing ? `Not caught yet · ${def.element}` : stats}
           {code && <> · <code className="text-plum-300">{code}</code></>}
           {status && status !== "available" && <> · <em>{status}</em></>}

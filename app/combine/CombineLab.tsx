@@ -60,7 +60,7 @@ function Flyer({ f, onDone }: { f: Flight; onDone: () => void }) {
   });
   return (
     <div ref={ref} aria-hidden className="fixed z-50 pointer-events-none origin-top-left drop-shadow-2xl" style={{ left: f.from.left, top: f.from.top, width: f.from.width, height: f.from.height }}>
-      <Image src={`/cards/${f.card.slug}.png`} alt="" width={240} height={336} className="size-full rounded-lg" />
+      <Image src={`/cards/${f.card.slug}.png`} alt="" width={240} height={240} className="size-full rounded-lg object-cover" />
     </div>
   );
 }
@@ -286,12 +286,12 @@ export default function CombineLab({ cards, spare }: { cards: LabCard[]; spare: 
                   >
                     <div
                       ref={(el) => { slotRefs.current[i] = el; }}
-                      className={`relative aspect-[5/7] rounded-xl border-2 ${s ? "border-transparent" : "border-dashed border-plum-700"} flex items-center justify-center text-plum-600 text-sm`}
+                      className={`relative aspect-square rounded-xl border-2 ${s ? "border-transparent" : "border-dashed border-plum-700"} flex items-center justify-center text-plum-600 text-sm`}
                     >
                       {!s && <span>Slot {i + 1}</span>}
                       {s && (
                         <div className={`absolute inset-0 transition-all duration-[450ms] ease-in ${s.landed ? "lab-land" : "opacity-0"}`} style={merge}>
-                          <Image src={`/cards/${s.card.slug}.png`} alt="" width={240} height={336} className="size-full rounded-xl" />
+                          <Image src={`/cards/${s.card.slug}.png`} alt="" width={240} height={240} className="size-full rounded-xl object-cover" />
                         </div>
                       )}
                     </div>
@@ -386,8 +386,8 @@ export default function CombineLab({ cards, spare }: { cards: LabCard[]; spare: 
                   aria-label={`Add ${def.name} level ${c.level} to a slot`}
                   className={`w-full text-left rounded-lg p-1 transition-opacity ${blocked ? "opacity-25" : "hover:bg-plum-800"} disabled:cursor-not-allowed`}
                 >
-                  <div ref={(el) => { if (el) itemRefs.current.set(c.code, el); else itemRefs.current.delete(c.code); }} className={`aspect-[5/7] ${used ? "invisible" : ""}`}>
-                    <Image src={`/cards/${c.slug}.png`} alt="" width={120} height={168} className="size-full rounded-md" />
+                  <div ref={(el) => { if (el) itemRefs.current.set(c.code, el); else itemRefs.current.delete(c.code); }} className={`aspect-square ${used ? "invisible" : ""}`}>
+                    <Image src={`/cards/${c.slug}.png`} alt="" width={120} height={120} className="size-full rounded-md object-cover" />
                   </div>
                   <div className="text-[11px] leading-tight mt-1 truncate">{RARITY_EMOJI[def.rarity]} {def.name}</div>
                   <div className="text-[10px] text-plum-500 truncate">Lv{c.level}{c.variant !== "normal" && ` · ${variantInfo(c.variant).name}`}</div>

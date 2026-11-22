@@ -149,6 +149,11 @@ class Raster {
       }
     }
   }
+  /** Paints a video frame (8-bit RGB, same size) as the background: `a` blended toward `b` by k, times brightness. */
+  backdrop(a: Uint8Array, b: Uint8Array | null, k: number, bright: number) {
+    const ka = (1 - (b ? k : 0)) * bright / 255, kb = b ? (k * bright) / 255 : 0;
+    for (let i = 0; i < this.px.length; i++) this.px[i] = a[i] * ka + (b ? b[i] * kb : 0);
+  }
   /** Additive vertical light beam from the bottom up to `top`, fading upward (hunt charge). */
   beam(cx: number, w: number, top: number, c: RGB, a = 1) {
     const x0 = Math.max(0, Math.floor(cx - w * 2.5)), x1 = Math.min(this.w - 1, Math.ceil(cx + w * 2.5));
@@ -283,10 +288,35 @@ function hunt(rarity: Rarity): Clip {
  * climb behind it (more and brighter for rarer cards, legendary+ shake), a flash hides the flip and the card turns
  * into its real picture (`face`: the card picture with its variant look) inside a burst. Plays once and ends on the card.
  */
-const RW = 300, RH = 210, FW = 90, FH = 126;
+const RW = 288, RH = 162, FW = 84, FH = 118;
+
+/**
+ * Frames of the hunt video (public/activity/hunting_frames.jpg, made by scripts/hunt-video-frames.mjs): first the calm
+ * meadow, then the green column rising to its flash. Loaded by warmFx; null means the clip draws its own mist instead.
+ * The counts must match CALM.n / COLUMN.n in that script.
+ */
+const HUNT_CALM = 12, HUNT_COLUMN = 24, SHEET_COLS = 6;
+type Frame = Uint8Array; // RW×RH RGB
+let MEADOW: { calm: Frame[]; column: Frame[] } | null = null;
+async function loadMeadow() {
+  try {
+    const rows = Math.ceil((HUNT_CALM + HUNT_COLUMN) / SHEET_COLS); // the sheet is drawn at 320×180 a frame: scale it to the clip size
+    const { data, info } = await sharp(path.join(process.cwd(), "public", "activity", "hunting_frames.jpg")).resize(SHEET_COLS * RW, rows * RH).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const frames = Array.from({ length: HUNT_CALM + HUNT_COLUMN }, (_, k) => {
+      const f = new Uint8Array(RW * RH * 3), x0 = (k % SHEET_COLS) * RW, y0 = Math.floor(k / SHEET_COLS) * RH;
+      for (let y = 0; y < RH; y++) f.set(data.subarray(((y0 + y) * info.width + x0) * 3, ((y0 + y) * info.width + x0 + RW) * 3), y * RW * 3);
+      return f;
+    });
+    MEADOW = { calm: frames.slice(0, HUNT_CALM), column: frames.slice(HUNT_CALM) };
+  } catch (e) {
+    console.error("fx: hunt video frames not loaded, the hunt clip draws its own mist:", e);
+  }
+}
+
 function huntReveal(rarity: Rarity, face: Img | null, back: Img | null): Clip {
   const rank = RANK[rarity], col = RARITY_RGB[rarity];
   const big = rank >= RANK.legendary;
+  const meadow = MEADOW, green = !!meadow && rank <= RANK.uncommon; // common/uncommon: the video's own green column is the pillar
   const burst = Array.from({ length: 40 + rank * 14 }, (_, i) => { const r = rng(rank * 991 + i); return { a: r() * Math.PI * 2, s: 0.4 + r() * 0.8, z: 0.8 + r() * 1.6 }; });
   const sparks = Array.from({ length: 10 + rank * 8 }, (_, i) => { const r = rng(rank * 313 + i); return { x: (r() - 0.5) * (60 + rank * 14), v: 0.7 + r() * 0.9, o: r(), z: 0.8 + r() }; });
   // Side beams peek out on both sides of the card (more for rarer cards); the centre one is wider than the card.
@@ -294,22 +324,32 @@ function huntReveal(rarity: Rarity, face: Img | null, back: Img | null): Clip {
   const cx = RW / 2, cy = RH / 2, m = mist(RW, RH);
   const at = (tex: Float32Array, x: number, y: number) => tex[y * m.w + (((Math.round(x) % m.w) + m.w) % m.w)];
   return {
-    w: RW, h: RH, frames: 40 + rank * 3, delay: 60,
+    w: RW, h: RH, frames: 34 + rank * 3, delay: 70,
     draw(r, t) {
       const search = clamp01(t / 0.3), rise = clamp01((t - 0.2) / 0.18), charge = clamp01((t - 0.36) / 0.32);
       const flip = clamp01((t - 0.68) / 0.12), reveal = clamp01((t - 0.78) / 0.22);
-      r.fill((x, y) => {
-        const sky = mix(hex(0x1c0d30), hex(0x0d0716), y / RH);
-        const fog = (at(m.a, x + t * 60, y) * 0.65 + at(m.b, x - t * 30, y) * 0.35) * 0.55;
-        const clear = clamp01(Math.hypot(x - cx, (y - cy) * 1.5) / (reveal * 190 + charge * 40 + 0.01));
-        return mix(sky, [0.42, 0.22, 0.62], fog * (charge > 0 || reveal > 0 ? clear : 1));
-      });
-      for (let k = 0; k < 14 && t < 0.34; k++) { // search: a gold trail sweeps through the mist
+      if (meadow) {
+        // The video: calm meadow while searching; then common/uncommon play its green column up to the flash,
+        // rarer cards hold the calm meadow, dimmed so their coded beams stand out. After the flip it settles dark.
+        const calmAt = meadow.calm[Math.min(HUNT_CALM - 1, Math.floor(clamp01(t / 0.36) * HUNT_CALM))];
+        const last = meadow.calm[HUNT_CALM - 1];
+        if (reveal > 0) r.backdrop(green ? meadow.column[HUNT_COLUMN - 1] : last, last, green ? Math.min(1, reveal * 2.5) : 1, 1 - 0.45 * Math.min(1, reveal * 2.5));
+        else if (green && charge > 0) r.backdrop(meadow.column[Math.min(HUNT_COLUMN - 1, Math.floor(clamp01((t - 0.36) / 0.42) * HUNT_COLUMN))], null, 0, 1);
+        else r.backdrop(charge > 0 ? last : calmAt, null, 0, 1 - 0.35 * charge);
+      } else {
+        r.fill((x, y) => {
+          const sky = mix(hex(0x1c0d30), hex(0x0d0716), y / RH);
+          const fog = (at(m.a, x + t * 60, y) * 0.65 + at(m.b, x - t * 30, y) * 0.35) * 0.55;
+          const clear = clamp01(Math.hypot(x - cx, (y - cy) * 1.5) / (reveal * 190 + charge * 40 + 0.01));
+          return mix(sky, [0.42, 0.22, 0.62], fog * (charge > 0 || reveal > 0 ? clear : 1));
+        });
+      }
+      for (let k = 0; k < 14 && t < 0.34; k++) { // search: a gold trail sweeps through the meadow
         const u = search - k * 0.025;
         if (u < 0) break;
         r.glow(-10 + u * (RW + 20), cy + Math.sin(u * 11) * 30, 3.4 - k * 0.18, [1, 0.85, 0.4], (1 - k / 14) * 0.9);
       }
-      if (charge > 0 && flip < 1) { // beams climb behind the card, pulsing; sparks pour upward
+      if (charge > 0 && flip < 1 && !green) { // beams climb behind the card, pulsing; sparks pour upward
         const pulse = 0.75 + 0.25 * Math.sin(t * 60);
         const top = RH * (1 - charge * 1.15);
         r.beam(cx, 30 + rank * 3, top, col, (0.3 + rank * 0.07) * pulse);
@@ -324,7 +364,7 @@ function huntReveal(rarity: Rarity, face: Img | null, back: Img | null): Clip {
         if (flip < 0.5) r.image(back, cx, y, FW, FH, sx);
         else r.image(face, cx, y, FW, FH, sx);
       }
-      if (flip > 0.4 && flip < 0.75) r.wash(mix(col, [1, 1, 1], 0.5), (1 - Math.abs(flip - 0.55) / 0.2) * 0.45); // the flash hides the turn
+      if (flip > 0.4 && flip < 0.75 && !green) r.wash(mix(col, [1, 1, 1], 0.5), (1 - Math.abs(flip - 0.55) / 0.2) * 0.45); // the flash hides the turn (the video brings its own)
       if (reveal > 0) {
         r.ring(cx, cy, reveal * (90 + rank * 14), 3, col, (1 - reveal) * 0.9);
         for (const p of burst) r.glow(cx + Math.cos(p.a) * reveal * 150 * p.s, cy + Math.sin(p.a) * reveal * 100 * p.s, p.z, col, 1 - reveal * 0.85);
@@ -564,7 +604,7 @@ const built = new Map<string, { buf: Buffer; ms: number }>();
 /** Builds every clip in the background, yielding between clips so the bot stays responsive. */
 export async function warmFx() {
   const t0 = Date.now();
-  await loadCardBack();
+  await Promise.all([loadCardBack(), loadMeadow()]);
   for (const [name, make] of Object.entries(CLIPS)) {
     try {
       const c = make();

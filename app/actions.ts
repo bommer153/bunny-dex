@@ -119,6 +119,14 @@ export async function npcSellAction(f: FormData) {
     return { ok: `Sold ${r.card.name} to the shop for ${r.coins} coins`, extra: { fx: "sell" } };
   });
 }
+export async function combineAllAction(f: FormData) {
+  await run("/combine", async (uid) => {
+    // Trust boundary: combineAll rejects any rarity outside BULK_RARITIES.
+    const rs = await cards.combineAll(uid, str(f, "rarity") as Parameters<typeof cards.combineAll>[1]);
+    const wins = rs.flatMap((r) => (r.success ? [`${r.card.name} (${r.card.rarity})`] : []));
+    return `Combined ${rs.length}× ${str(f, "rarity")}: ${wins.length} upgraded, ${rs.length - wins.length} fizzled${wins.length ? ` · got ${wins.join(", ")}` : ""}`;
+  });
+}
 export async function dailyAction() {
   await run("/profile", async (uid) => `Daily claimed: ${(await player.daily(uid)).coins} coins + 2 carrots, energy refilled`);
 }
