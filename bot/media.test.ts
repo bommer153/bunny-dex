@@ -73,7 +73,7 @@ test("card pictures: framed in the rarity color, legendary+ animated, embed URL 
   const still = cardFile(of("uncommon").slug);
   const { data, info: m } = await sharp(still.attachment as Buffer).raw().toBuffer({ resolveWithObject: true });
   const px = (x: number, y: number) => [...data.subarray((y * m.width + x) * m.channels, (y * m.width + x) * m.channels + 3)];
-  assert.deepEqual(px(57, 275), [0x22, 0xc5, 0x5e]); // left edge of the frame = uncommon green
+  assert.deepEqual(px(62, 275), [0x22, 0xc5, 0x5e]); // left edge of the card's ring = uncommon green
   const legend = of("legendary");
   assert.equal(cardFile(legend.slug).name, `${legend.slug}.gif`);
   assert.equal((cardFile(legend.slug).attachment as Buffer).subarray(0, 6).toString(), "GIF89a");

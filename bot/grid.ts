@@ -86,11 +86,10 @@ function cardFace(def: CardDef, x: number, y: number, a: ReturnType<typeof artBo
     `<text x="${x + 40 + k * 52}" y="${y + 240.5}" ${T} font-size="7" font-weight="bold" fill="#a78bfa" text-anchor="end">${label}</text><text x="${x + 43 + k * 52}" y="${y + 241}" ${T} font-size="10" font-weight="bold" fill="#fff">${v}</text>`;
   const under = `<linearGradient id="bg-${def.slug}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ec}" stop-opacity=".5"/><stop offset=".5" stop-color="#2a1545"/><stop offset="1" stop-color="#1a0d2e"/></linearGradient>
     <rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${CARD_H - 12}" rx="10" fill="url(#bg-${def.slug})"/>`;
-  const over = `<rect x="${a.x - 1.5}" y="${a.y - 1.5}" width="${a.w + 3}" height="${a.h + 3}" rx="4" fill="none" stroke="${stroke}" stroke-width="3"/>
-    <rect x="${a.x + 1}" y="${a.y + 1}" width="${a.w - 2}" height="${a.h - 2}" rx="3" fill="none" stroke="#fff" stroke-opacity=".35"/>
-    <text x="${x + 13}" y="${y + 25}" ${T} font-size="14" font-weight="bold" fill="#fff">${esc(def.name)}</text>
-    <g transform="translate(${x + 158} ${y + 20})"><circle r="10.5" fill="${ec}" stroke="#fff" stroke-width="1.5"/><g fill="#1e1030">${ELEMENT_ICON[el]}</g></g>
-    <g transform="translate(${a.x + a.w - 16} ${a.y + a.h - 16})"><circle r="13.5" fill="#1e1030" stroke="${stroke}" stroke-width="2.5"/><image href="${badgeHref(rarity)}" x="-11.5" y="-11.5" width="23" height="23"/></g>
+  const over = `<rect x="${a.x + 0.5}" y="${a.y + 0.5}" width="${a.w - 1}" height="${a.h - 1}" rx="3" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width=".8"/>
+    <text x="${x + 13}" y="${y + 25}" ${T} font-size="${Math.min(14, 108 / (def.name.length * 0.6)).toFixed(1)}" font-weight="bold" fill="#fff">${esc(def.name)}</text>
+    <g transform="translate(${x + 134} ${y + 20})"><circle r="10.5" fill="#1e1030" stroke="${stroke}" stroke-width="1"/><image href="${badgeHref(rarity)}" x="-8.5" y="-8.5" width="17" height="17"/></g>
+    <g transform="translate(${x + 158} ${y + 20})"><circle r="10.5" fill="${ec}" stroke="#fff" stroke-width="1"/><g fill="#1e1030">${ELEMENT_ICON[el]}</g></g>
     <rect x="${x + 14}" y="${a.y + a.h + 6}" width="${TILE - 28}" height="13" rx="6.5" fill="${ec}" fill-opacity=".18" stroke="${ec}" stroke-opacity=".5"/>
     <text x="${x + 90}" y="${a.y + a.h + 15.5}" ${T} font-size="7.5" font-weight="bold" fill="${ec}" text-anchor="middle">${cap(rarity)} ${cap(el)} bunny</text>
     ${text.join("")}
@@ -147,7 +146,10 @@ function effects(list: Tile[], t: number, W: number, H: number, scale: number) {
       over += `${face.over}<rect x="${x + 6}" y="${y + 6}" width="${TILE - 12}" height="${th - 12}" rx="10" fill="url(#glass)" opacity=".55"/>
         <rect x="${x + 7.5}" y="${y + 7.5}" width="${TILE - 15}" height="${th - 15}" rx="9" fill="none" stroke="#fff" stroke-opacity=".3"/>`;
     }
-    over += `<rect x="${x + 3}" y="${y + 3}" width="${TILE - 6}" height="${th - 6}" rx="14" fill="none" stroke="${stroke}" stroke-width="6"/>`;
+    // Grid tiles: a thick frame. Card pictures: a thin ring like the web's card tiles (ring-2, rounded-xl).
+    over += c.card
+      ? `<rect x="${x + 5}" y="${y + 5}" width="${TILE - 10}" height="${th - 10}" rx="11" fill="none" stroke="${stroke}" stroke-width="2"/>`
+      : `<rect x="${x + 3}" y="${y + 3}" width="${TILE - 6}" height="${th - 6}" rx="14" fill="none" stroke="${stroke}" stroke-width="6"/>`;
     if (rank >= RANK.mythic) {
       const n = rarity === "secret" ? 7 : 4;
       for (let k = 0; k < n; k++) {
